@@ -145,8 +145,8 @@ class PublisherLogicMixin(object):
         draft = self._meta.model.objects.get(id=self.id)
         draft.pk = None
         draft.id = None
-        draft.is_published = False
-        draft.published = self
+        draft.publisher_is_published_version = False
+        draft.publisher_published_version = self
         # If save() was called even though a draft already exists,
         # we'll get the db error here.
         draft.save()
