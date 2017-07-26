@@ -1,0 +1,7 @@
+include AUTHORS
+include LICENSE
+include README.rst
+include CHANGELOG.rst
+recursive-include djangocms_publisher/templates *
+recursive-include djangocms_publisher/static *
+recursive-include djangocms_publisher/locale *
