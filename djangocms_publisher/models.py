@@ -75,7 +75,8 @@ class PublisherLogicMixin(object):
         pass
 
     def publisher_copy_object(self, old_obj, commit=True):
-        # TODO: use the id swapping trick (but remember to set live_id too!)
+        # TODO: use the id swapping trick (but remember to set
+        #       publisher_published_version_id too!)
         for field in self._meta.get_fields():
             if (
                 not field.concrete or
