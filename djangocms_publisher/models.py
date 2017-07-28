@@ -221,7 +221,6 @@ class PublisherModelMixin(models.Model):
         # There is an existing live version:
         # * update the live version with the data from the draft
         published = draft.publisher_published_version
-        # import ipdb; ipdb.set_trace()
         published.publisher_published_at = now
         published.publisher_copy_object(old_obj=self)
         # * find any other objects still pointing to the draft version and
