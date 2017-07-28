@@ -7,10 +7,8 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
-from djangocms_publisher.utils import DEFAULT_COPY_EXCLUDE_FIELDS
 
-from .dependency_graph import update_relations, ignore_stuff_to_dict
-from . import utils
+from .dependency_graph import update_relations
 
 
 class PublisherQuerySetMixin(object):
@@ -84,12 +82,21 @@ class PublisherModelMixin(models.Model):
     class Meta:
         abstract = True
 
-    publisher_copy_exclude_fields = ()
+    _publisher_ignore_copy_fields = (
+        'pk',
+        'id',
+        'publisher_is_published_version',
+        'publisher_published_version',
+        'publisher_draft_version',
+        'publisher_published_at',
+        'publisher_deletion_requested',
+    )
+    publisher_ignore_copy_fields = ()
 
-    def publisher_get_copy_exclude_fields(self):
+    def publisher_get_ignore_copy_fields(self):
         return (
-            set(DEFAULT_COPY_EXCLUDE_FIELDS) |
-            set(self.publisher_copy_exclude_fields)
+            set(self._publisher_ignore_copy_fields) |
+            set(self.publisher_ignore_copy_fields)
         )
 
     # USER OVERRIDABLE METHODS
@@ -97,30 +104,34 @@ class PublisherModelMixin(models.Model):
         # At this point the basic fields on the model have all already been
         # copied. Only relations need to be copied now.
         # If this was a django-parler model, the translations will already
-        # have been copied. (but without their relations, that is also up to
-        # you to do here).
-        # Warning:
-        # External apps should not have relations to any of the objects
-        # copied here manually because the draft version will be deleted.
-        # If you don't want that to happen, you'll have to be smart about not
-        # deleting and recreating all the related objects and instead update
-        # them. But it may not always be possible or straight forward.
+        # have been copied to (again, without their relations, that is up to
+        # you to do here.
         pass
 
     def publisher_copy_object(self, old_obj, commit=True):
         # TODO: use the id swapping trick (but remember to set
         #       publisher_published_version_id too!)
-        utils.copy_object(
-            new_obj=self,
-            old_obj=old_obj,
-            exclude_fields=self.publisher_get_copy_exclude_fields(),
-        )
+        for field in self._meta.get_fields():
+            print(field, end='')
+            if (
+                not field.concrete or
+                field.name in self.publisher_get_ignore_copy_fields()
+            ):
+                print(' [skip]')
+                continue
+            elif isinstance(field, models.ManyToManyField):
+                print(' [skip ManyToManyField]')
+                continue
+            else:
+                print(' copying...')
+            try:
+                setattr(self, field.name, getattr(old_obj, field.name))
+            except Exception as exc:
+                # import ipdb; ipdb.set_trace()
+                raise
         if commit:
             self.save()
             self.publisher_copy_relations(old_obj=old_obj)
-
-    def publisher_rewrite_ignore_stuff(self, old_obj):
-        return {}
 
     def publisher_can_publish(self):
         assert self.publisher_is_draft_version
@@ -190,13 +201,7 @@ class PublisherModelMixin(models.Model):
     @transaction.atomic
     def publisher_discard_draft(self):
         assert self.publisher_is_draft_version
-        old_obj = self
-        new_obj = self.publisher_published_version
-        update_relations(
-            old_obj=old_obj,
-            new_obj=new_obj,
-            exclude=ignore_stuff_to_dict(self.publisher_rewrite_ignore_stuff(old_obj=old_obj))
-        )
+        update_relations(obj=self, new_obj=self.publisher_published_version)
         self.delete()
 
     @transaction.atomic
@@ -227,11 +232,7 @@ class PublisherModelMixin(models.Model):
         # * find any other objects still pointing to the draft version and
         #   switch them to the live version. (otherwise cascade or set null
         #   would yield unexpected results)
-        update_relations(
-            old_obj=draft,
-            new_obj=published,
-            exclude=ignore_stuff_to_dict(self.publisher_rewrite_ignore_stuff(old_obj=draft))
-        )
+        update_relations(obj=draft, new_obj=published)
         # * Delete draft (self)
         draft.delete()
         return published

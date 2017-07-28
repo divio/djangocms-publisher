@@ -1,0 +1,10 @@
+{% load i18n %}
+{% if original.publisher_is_published_version and original.publisher_has_pending_deletion_request %}
+    <span class="filer-label filer-label-danger">{% trans 'Pending deletion' %}</span>
+{% elif original.publisher_is_draft_version and original.publisher_has_pending_changes %}
+    <span class="filer-label filer-label-warning">{% trans 'Unpublished changes' %}</span>
+{% elif original.publisher_is_draft_version and original.publisher_has_published_version %}
+    <span class="filer-label filer-label-warning">{% trans 'Not published' %}</span>
+{% else %}
+    <span class="filer-label filer-label-warning">LIVE. don't show this</span>
+{% endif %}
