@@ -3,8 +3,7 @@ from __future__ import unicode_literals
 
 import itertools
 
-from django.db.models.deletion import get_candidate_relations_to_delete
-from .utils import parler_is_installed
+from .compat import PARLER_IS_INSTALLED
 
 
 def get_related_objects(obj, excludes=None, using='default'):
@@ -25,7 +24,7 @@ def get_related_objects(obj, excludes=None, using='default'):
 
 def update_one_to_many_relation(old_obj, new_obj, field, exclude):
     # A ForeignKey pointing to this model.
-    if parler_is_installed:
+    if PARLER_IS_INSTALLED:
         from parler.models import TranslatableModelMixin
         # Don't update the relationship from the transated model to the master.
         if (
@@ -141,7 +140,6 @@ def get_related_fields(model):
         reverse=True,
         include_hidden=True,
     )
-    return get_candidate_relations_to_delete(model._meta)
 
 
 def ignore_stuff_to_dict(ignore):

@@ -1,53 +1,80 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
 
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
-from djangocms_publisher.utils import DEFAULT_COPY_EXCLUDE_FIELDS
+from djangocms_publisher.utils.copying import DEFAULT_COPY_EXCLUDE_FIELDS
 
-from .dependency_graph import update_relations, ignore_stuff_to_dict
-from . import utils
+from .utils.relations import update_relations, ignore_stuff_to_dict
+from .utils.copying import copy_object
+from .utils.compat import PARLER_IS_INSTALLED
 
 
 class PublisherQuerySetMixin(object):
     def publisher_published(self):
-        return self.filter(publisher_is_published=True)
+        return self.filter(publisher_is_published_version=True)
 
     def publisher_drafts(self):
-        return self.filter(publisher_is_published=False)
+        return self.filter(publisher_is_published_version=False)
 
     def publisher_pending_deletion(self):
         return self.filter(
-            publisher_is_published=True,
+            publisher_is_published_version=True,
             publisher_deletion_requested=True,
         )
 
     def publisher_pending_changes(self):
         return self.filter(
-            Q(publisher_is_published=False) |
-            Q(publisher_is_published=True, publisher_draft__isnull=False)
+            Q(publisher_is_published_version=False) |
+            Q(
+                publisher_is_published_version=True,
+                publisher_draft_version__isnull=False,
+            )
         )
 
-    def publisher_drafts_or_published_only(self):
+    def publisher_draft_or_published_only(self, prefer_drafts=False):
         """
         Returns a queryset that does not return duplicates of the same object
         if there is both a draft and published version.
         only a draft: include the draft
         only a published: include the published
-        draft and published: inlcude the published
+        draft and published: include the published (the other way around if
+        prefer_draft=True)
 
-        So shorter version: exclude drafts that have a published version.
+        So shorter version:
+         - prefer_draft=False: exclude drafts that have a published version.
+         - prefer_draft=True: exclude published versions that have a draft.
         """
-        return self.filter(
-            # published objects
-            Q(publisher_is_published=True) |
-            # OR drafts without a published version
-            Q(publisher_is_published=False, publisher_published__isnull=True)
-        )
+        if prefer_drafts:
+            return self.filter(
+                # draft objects
+                Q(publisher_is_published_version=False) |
+                # OR published without a draft version
+                Q(
+                    publisher_is_published_version=True,
+                    publisher_draft_version__isnull=True,
+                )
+            )
+        else:
+            return self.filter(
+                # published objects
+                Q(publisher_is_published_version=True) |
+                # OR drafts without a published version
+                Q(
+                    publisher_is_published_version=False,
+                    publisher_published_version__isnull=True,
+                )
+            )
+
+    def publisher_draft_or_published_only_prefer_drafts(self):
+        return self.publisher_draft_or_published_only(prefer_drafts=True)
+
+    def publisher_draft_or_published_only_prefer_published(self):
+        return self.publisher_draft_or_published_only(prefer_drafts=False)
 
 
 class PublisherQuerySet(PublisherQuerySetMixin, models.QuerySet):
@@ -58,6 +85,7 @@ class PublisherModelMixin(models.Model):
     publisher_is_published_version = models.BooleanField(
         default=False,
         editable=False,
+        db_index=True,
     )
     publisher_published_version = models.OneToOneField(
         to='self',
@@ -77,6 +105,7 @@ class PublisherModelMixin(models.Model):
     publisher_deletion_requested = models.BooleanField(
         default=False,
         editable=False,
+        db_index=True,
     )
 
     objects = PublisherQuerySet.as_manager()
@@ -110,7 +139,7 @@ class PublisherModelMixin(models.Model):
     def publisher_copy_object(self, old_obj, commit=True):
         # TODO: use the id swapping trick (but remember to set
         #       publisher_published_version_id too!)
-        utils.copy_object(
+        copy_object(
             new_obj=self,
             old_obj=old_obj,
             exclude_fields=self.publisher_get_copy_exclude_fields(),
@@ -132,16 +161,7 @@ class PublisherModelMixin(models.Model):
         # FOR SUBCLASSES
         # Checks whether the user has permissions to publish
         return True
-    # END USER OVERRIDABLE METHODS
-    #
-    # def clean(self):
-    #     super(PublisherLogicMixin, self).clean()
-    #     if self.publisher_is_published_version and self.publisher_published_version_id:
-    #         raise ValidationError(
-    #             'A live object can\'t set the published relationship.'
-    #         )
-    #     if self.publisher_is_draft_version and self.publisher_deletion_requested:
-    #         raise ValidationError('invalid')
+    # /USER OVERRIDABLE METHODS
 
     @property
     def publisher_is_draft_version(self):
@@ -175,7 +195,9 @@ class PublisherModelMixin(models.Model):
         assert self.publisher_is_published_version
         if self.publisher_has_pending_deletion_request:
             self.publisher_discard_requested_deletion()
-        # TODO: Get draft without a query (copy in memory)
+        # TODO: Get draft without a query by copying in memory)
+        #       Simply setting pk and id was causing weird problems (probably
+        #       related to django-parler).
         draft = self._meta.model.objects.get(id=self.id)
         draft.pk = None
         draft.id = None
@@ -186,6 +208,20 @@ class PublisherModelMixin(models.Model):
         draft.save()
         draft.publisher_copy_relations(old_obj=self)
         return draft
+
+    def publisher_get_or_create_draft(self):
+        if self.publisher_is_draft_version:
+            return self, False
+        elif (
+            self.publisher_is_published_version and
+            self.publisher_has_pending_changes
+        ):
+            return self.publisher_draft_version, False
+        elif (
+            self.publisher_is_published_version and
+            not self.publisher_has_pending_changes
+        ):
+            return self.publisher_create_draft(), True
 
     @transaction.atomic
     def publisher_discard_draft(self):
@@ -233,6 +269,11 @@ class PublisherModelMixin(models.Model):
         )
         # * Delete draft (self)
         draft.delete()
+        # Refresh from db to get the latest version without any cached stuff.
+        # refresh_from_db() does not work in some cases because parler
+        # caches translations at _translations_cache wich may remain with stale
+        # data.
+        published = self._meta.model.objects.get(pk=published.pk)
         return published
 
     @transaction.atomic
@@ -277,6 +318,13 @@ class PublisherModelMixin(models.Model):
             return self
         if self.publisher_published_version_id:
             return self.publisher_published_version
+        return None
+
+    def publisher_get_draft_version(self):
+        if self.publisher_is_draft_version:
+            return self
+        if self.publisher_has_pending_changes:
+            return self.publisher_draft_version
         return None
 
     def publisher_available_actions(self, user):
@@ -336,6 +384,8 @@ class PublisherModelMixin(models.Model):
 
     @cached_property
     def publisher_is_parler_model(self):
+        if not PARLER_IS_INSTALLED:
+            return False
         from parler.models import TranslatableModel
         return isinstance(self, TranslatableModel)
 

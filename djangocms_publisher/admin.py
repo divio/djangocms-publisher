@@ -10,7 +10,7 @@ from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 
 
-from .utils import parler_is_installed
+from .utils.compat import PARLER_IS_INSTALLED
 
 
 class PublisherAdminMixinBase(object):
@@ -51,7 +51,7 @@ class PublisherAdminMixinBase(object):
         return True
 
     def has_delete_permission(self, request, obj=None):
-        if parler_is_installed:
+        if PARLER_IS_INSTALLED:
             # Parler checks with this method for the translation specific delete
             # view as well.
             # We can't add the publisher related methods to the parler
@@ -86,6 +86,7 @@ class PublisherAdminMixinBase(object):
         has_delete_permission = self.has_delete_permission(request, obj)
         has_change_permission = self.has_change_permission(request, obj)
         has_publish_permission = self.has_publish_permission(request, obj)
+        add_mode = not bool(obj)
         buttons = {}
         if (
             not is_enabled and
@@ -95,11 +96,12 @@ class PublisherAdminMixinBase(object):
         ):
             # This is the case when we've disable the whole draft/live
             # functionality. We just show the default django buttons.
-            if has_change_permission:
-                buttons['save'] = copy(defaults['save'])
-                buttons['save_and_continue'] = copy(defaults['save_and_continue'])
-            if has_delete_permission:
-                buttons['delete'] = copy(defaults['delete'])
+            self._publisher_get_buttons_default(
+                buttons=buttons,
+                defaults=defaults,
+                has_change_permission=has_change_permission,
+                has_delete_permission=has_delete_permission,
+            )
             return buttons
 
         if obj and obj.pk and obj.publisher_is_draft_version and has_change_permission:
@@ -114,6 +116,38 @@ class PublisherAdminMixinBase(object):
             # Not published drafts can be deleted the usual way
             buttons['delete'] = copy(defaults['delete'])
 
+        if add_mode:
+            self._publisher_get_buttons_default(
+                buttons=buttons,
+                defaults=defaults,
+                has_change_permission=has_change_permission,
+                has_delete_permission=has_delete_permission,
+            )
+        else:
+            self._publisher_get_buttons_edit(
+                buttons=buttons,
+                obj=obj,
+                defaults=defaults,
+                has_publish_permission=has_publish_permission,
+                request=request,
+            )
+        ordered_buttons = OrderedDict()
+        for key in defaults.keys():
+            if key not in buttons:
+                continue
+            ordered_buttons[key] = buttons.pop(key)
+        for key, value in buttons.items():
+            ordered_buttons[key] = value
+        return ordered_buttons
+
+    def _publisher_get_buttons_default(self, buttons, defaults, has_change_permission, has_delete_permission):
+        if has_change_permission:
+            buttons['save'] = copy(defaults['save'])
+            buttons['save_and_continue'] = copy(defaults['save_and_continue'])
+        if has_delete_permission:
+            buttons['delete'] = copy(defaults['delete'])
+
+    def _publisher_get_buttons_edit(self, buttons, defaults, obj, has_publish_permission, request):
         for action in obj.publisher_available_actions(request.user).values():
             action_name = action['name']
             buttons[action_name] = copy(defaults[action_name])
@@ -156,14 +190,6 @@ class PublisherAdminMixinBase(object):
             buttons['cancel']['url'] = self.publisher_get_admin_changelist_url(obj)
         elif obj.publisher_is_draft_version and obj.publisher_has_published_version:
             buttons['cancel']['url'] = self.publisher_get_detail_or_changelist_url(obj.publisher_published_version)
-        ordered_buttons = OrderedDict()
-        for key in defaults.keys():
-            if key not in buttons:
-                continue
-            ordered_buttons[key] = buttons.pop(key)
-        for key, value in buttons.items():
-            ordered_buttons[key] = value
-        return ordered_buttons
 
     def response_change(self, request, obj):
         """
@@ -174,6 +200,13 @@ class PublisherAdminMixinBase(object):
         form before publishing.
         """
         if request.POST and '_create_draft' in request.POST:
+            if obj.publisher_is_published_version and obj.publisher_has_pending_changes:
+                # There already is a draft. Just redirect to it.
+                return HttpResponseRedirect(
+                    self.publisher_get_detail_admin_url(
+                        obj.publisher_draft_versiondraft
+                    )
+                )
             draft = obj.publisher_create_draft()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(draft))
         elif request.POST and '_discard_draft' in request.POST:
@@ -245,6 +278,17 @@ class PublisherAdminMixin(PublisherAdminMixinBase):
 
 
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
+    def get_readonly_fields(self, request, obj=None):
+        readonly_fields = (
+            super(PublisherParlerAdminMixin, self)
+            .get_readonly_fields(request, obj=obj)
+        )
+        if not obj or obj and not obj.publisher_is_published_version:
+            return readonly_fields
+        readonly_fields = set(readonly_fields)
+        readonly_fields |= set(obj._parler_meta.get_translated_fields())
+        return list(readonly_fields)
+
     def get_change_form_base_template(self):
         """
         Determine what the actual `change_form_template` should be.

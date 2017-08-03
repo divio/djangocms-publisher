@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals, print_function
 
-from django.conf import settings
-
+from .compat import CMS_IS_INSTALLED, PARLER_IS_INSTALLED
 
 DEFAULT_COPY_EXCLUDE_FIELDS = (
     'pk',
@@ -15,14 +14,10 @@ DEFAULT_COPY_EXCLUDE_FIELDS = (
 )
 
 
-parler_is_installed = 'parler' in settings.INSTALLED_APPS
-cms_is_installed = 'cms' in settings.INSTALLED_APPS
-
-if cms_is_installed:
+if CMS_IS_INSTALLED:
     from cms.models.fields import PlaceholderField
 
     def is_placeholder_field(field):
-        print(field, isinstance(field, PlaceholderField))
         return isinstance(field, PlaceholderField)
 else:
     def is_placeholder_field(field):
@@ -66,7 +61,13 @@ def copy_object(new_obj, old_obj, exclude_fields=None):
         setattr(new_obj, name, value)
 
 
-def copy_parler_translations(new_obj, old_obj, extra_exclude_fields=None):
+def copy_parler_translations(
+    new_obj,
+    old_obj,
+    extra_exclude_fields=None,
+    extra_values=None,
+    delete_removed_translations=True,
+):
     # get_or_create all translations from the old model and apply them
     # to the new.
     exclude_fields = {'master', 'language_code'}
@@ -80,6 +81,8 @@ def copy_parler_translations(new_obj, old_obj, extra_exclude_fields=None):
             old_translation,
             exclude_fields=exclude_fields,
         )
+        if extra_values is not None:
+            fields_to_copy.update(extra_values)
         new_translation, created = new_obj.translations.update_or_create(
             language_code=old_translation.language_code,
             defaults=fields_to_copy,
@@ -89,9 +92,8 @@ def copy_parler_translations(new_obj, old_obj, extra_exclude_fields=None):
                 old_translation=old_translation,
                 new_translation=new_translation,
             )
-    # TODO: update_relations before deleting? Is is possible? Does anyone
-    #       even have a relation to a specific language?
-    new_obj.translations.exclude(language_code__in=old_languages).delete()
+    if delete_removed_translations:
+        new_obj.translations.exclude(language_code__in=old_languages).delete()
 
 
 def copy_placeholder(old_placeholder, new_placeholder):
