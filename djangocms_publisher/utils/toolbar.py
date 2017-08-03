@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 
-from cms.constants import LEFT, RIGHT
-
+from cms.constants import RIGHT
 from cms.toolbar.items import Button, ButtonList
 from django.utils.encoding import force_text
 

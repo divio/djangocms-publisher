@@ -1,0 +1,14 @@
+[run]
+source = djangocms_publisher
+branch = True
+omit =
+    djangocms_publisher/migrations/*
+    djangocms_publisher/tests/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:

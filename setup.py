@@ -26,6 +26,7 @@ setup(
     packages=find_packages(),
     install_requires=(
         'Django>=1.8,<1.10.999',  # Django is known to use rc versions
+        'django-cms>=3.4',  # FIXME: bump to 3.5 for djangocms-moderation
     ),
     include_package_data=True,
     zip_safe=False,
