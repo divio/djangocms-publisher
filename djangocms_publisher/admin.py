@@ -166,7 +166,16 @@ class PublisherAdminMixinBase(object):
             buttons[action_name] = copy(defaults[action_name])
             buttons[action_name]['url'] = self.publisher_get_detail_admin_url(obj.publisher_draft_version)
             buttons[action_name]['has_permission'] = True
-        if obj.publisher_is_draft_version and obj.publisher_has_published_version:
+        if obj.publisher_is_draft_version:
+            # Add a link to go back to live
+            action_name = 'show_live'
+            buttons[action_name] = copy(defaults[action_name])
+            if obj.publisher_has_published_version:
+                buttons[action_name]['has_permission'] = True
+                buttons[action_name]['url'] = self.publisher_get_detail_admin_url(obj.publisher_published_version)
+            else:
+                buttons[action_name]['has_permission'] = False
+        elif obj.publisher_is_draft_version and not obj.publisher_has_published_version:
             # Add a link to go back to live
             action_name = 'show_live'
             buttons[action_name] = copy(defaults[action_name])
@@ -179,17 +188,9 @@ class PublisherAdminMixinBase(object):
             if has_publish_permission:
                 buttons.pop('publish_deletion', None)
                 buttons['delete'] = copy(defaults['delete'])
-        buttons['cancel'] = copy(defaults['cancel'])
-        if (
-            obj.publisher_is_published_version or
-            (
-                obj.publisher_is_draft_version and
-                not obj.publisher_has_published_version
-            )
-        ):
+        if obj.publisher_is_published_version:
+            buttons['cancel'] = copy(defaults['cancel'])
             buttons['cancel']['url'] = self.publisher_get_admin_changelist_url(obj)
-        elif obj.publisher_is_draft_version and obj.publisher_has_published_version:
-            buttons['cancel']['url'] = self.publisher_get_detail_or_changelist_url(obj.publisher_published_version)
 
     def response_change(self, request, obj):
         """
@@ -254,13 +255,11 @@ def get_all_button_defaults():
     defaults['discard_requested_deletion'] = {'label': _('Discard deletion request')}
     defaults['publish_deletion'] = {'label': _('Delete'), 'class': 'danger'}
 
-    # Intentionally does not include "save as new" and
-    # "save and add another" because we don't need them in filer.
+    # TODO: Support for "save as new" and "save and add another"
     defaults['save'] = {
         'label': _('Save'),
         'class': 'default',
         'field_name': '_save',
-        'has_permission': True,
     }
     defaults['delete'] = {
         'deletelink': True,  # Special case in template
@@ -268,8 +267,9 @@ def get_all_button_defaults():
     defaults['save_and_continue'] = {
         'label': _('Save and continue editing'),
         'field_name': '_continue',
-        'has_permission': True,
     }
+    for btn in defaults.values():
+        btn['has_permission'] = True
     return defaults
 
 
