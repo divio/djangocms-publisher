@@ -59,6 +59,8 @@ class PublisherAdminMixinBase(object):
             from parler.models import TranslatedFieldsModel
             if isinstance(obj, TranslatedFieldsModel):
                 obj = obj.master
+                # FIXME: make this work
+                return True
         if obj and obj.pk and obj.publisher_is_published_version:
             if (
                 obj.publisher_has_pending_deletion_request and
@@ -284,6 +286,67 @@ class PublisherAdminMixin(PublisherAdminMixinBase):
 
 
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
+
+    def get_language_tabs(self, request, obj, available_languages, css_class=None):
+        """
+        Determine the language tabs to show.
+        """
+        tabs = super(PublisherParlerAdminMixin, self).get_language_tabs(
+            request,
+            obj=obj,
+            available_languages=available_languages,
+            css_class=css_class,
+        )
+        if not obj or obj and not obj.pk:
+            # Is this ok to do?
+            return tabs
+
+        languages = [tab[2] for tab in tabs]
+
+        if obj.publisher_is_published_version:
+            draft_translations = obj.publisher_has_pending_changes
+            published_translations = obj.translations.filter(language_code__in=languages)
+
+            if obj.publisher_has_pending_changes:
+                draft_translations = obj.publisher_draft_version.translations.filter(language_code__in=languages)
+            else:
+                draft_translations = published_translations.none()
+        else:
+            draft_translations = obj.translations.filter(language_code__in=languages)
+
+            if obj.publisher_has_published_version:
+                published_translations = obj.publisher_published_version.translations.filter(language_code__in=languages)
+            else:
+                published_translations = draft_translations.none()
+
+        draft_translations_by_language = {trans.language_code: trans for trans in draft_translations}
+        published_translations_by_language = {trans.language_code: trans for trans in published_translations}
+
+        for pos, tab in enumerate(tabs):
+            language = tab[2]
+            draft_translation = draft_translations_by_language.get(language)
+            published_translation = published_translations_by_language.get(language)
+
+            if published_translation and obj.publisher_is_draft_version:
+                # change link to point to published version of language
+                url_name = 'admin:%s_%s_%s' % (self.opts.app_label, self.opts.model_name, 'change')
+                tabs[pos] = list(tabs[pos])
+                tabs[pos][0] = reverse(url_name, args=[published_translation.master_id])
+            elif not published_translation and obj.publisher_is_published_version:
+                # User is on published version of master object
+                # but there's no published version for tab language
+                if draft_translation:
+                    # Link directly to the draft version
+                    url_name = 'admin:%s_%s_%s' % (self.opts.app_label, self.opts.model_name, 'change')
+                    tabs[pos] = list(tabs[pos])
+                    tabs[pos][0] = reverse(url_name, args=[draft_translation.master_id])
+                else:
+                    # Link to custom endpoint that creates draft version
+                    # of master and/or draft version of language
+                    tabs[pos] = list(tabs[pos])
+                    tabs[pos][0] = ''
+        return tabs
+
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = (
             super(PublisherParlerAdminMixin, self)

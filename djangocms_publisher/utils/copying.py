@@ -55,19 +55,27 @@ def get_fields_to_copy(obj, exclude_fields=None):
     return fields
 
 
-def copy_object(new_obj, old_obj, exclude_fields=None):
+def copy_object(
+    old_obj,
+    new_obj,
+    exclude_fields=None,
+    extra_values=None,
+):
+    extra_values = extra_values or {}
     fields_to_copy = get_fields_to_copy(old_obj, exclude_fields=exclude_fields)
+    fields_to_copy.update(extra_values)
     for name, value in fields_to_copy.items():
         setattr(new_obj, name, value)
 
 
 def copy_parler_translations(
-    new_obj,
     old_obj,
+    new_obj,
     extra_exclude_fields=None,
     extra_values=None,
     delete_removed_translations=True,
 ):
+    # FIXME: this function can probably be removed now.
     # get_or_create all translations from the old model and apply them
     # to the new.
     exclude_fields = {'master', 'language_code'}
@@ -96,12 +104,20 @@ def copy_parler_translations(
         new_obj.translations.exclude(language_code__in=old_languages).delete()
 
 
-def copy_placeholder(old_placeholder, new_placeholder):
+def copy_placeholder(
+    old_placeholder,
+    new_placeholder,
+    lanuage_code,
+):
     # stolen from cms.models.pagemodel.Page._copy_contents()
     from cms.models.pluginmodel import CMSPlugin
     from cms.utils.copy_plugins import copy_plugins_to
 
-    for plugin in CMSPlugin.objects.filter(placeholder=new_placeholder).order_by('-depth'):
+    for plugin in (
+            CMSPlugin.objects
+            .filter(placeholder=new_placeholder, language_code=lanuage_code)
+            .order_by('-depth')
+    ):
         inst, cls = plugin.get_plugin_instance()
         if inst and getattr(inst, 'cmsplugin_ptr_id', False):
             inst.cmsplugin_ptr = plugin
@@ -113,3 +129,10 @@ def copy_placeholder(old_placeholder, new_placeholder):
 
     plugins = old_placeholder.get_plugins_list()
     copy_plugins_to(plugins, new_placeholder)
+
+
+def refresh_from_db(obj):
+    # This is more aggressive than djangos built in .refresh_from_db. It is
+    # necessary for parler models, because parler has a bunch of caches on
+    # the obj.
+    return obj._meta.model.objects.get(pk=obj.pk)

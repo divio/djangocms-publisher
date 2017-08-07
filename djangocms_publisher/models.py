@@ -9,8 +9,12 @@ from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
 from .utils.compat import PARLER_IS_INSTALLED
-from .utils.copying import DEFAULT_COPY_EXCLUDE_FIELDS, copy_object
-from .utils.relations import ignore_stuff_to_dict, update_relations
+from .utils.copying import (
+    DEFAULT_COPY_EXCLUDE_FIELDS,
+    copy_object,
+    get_fields_to_copy,
+    refresh_from_db)
+from .utils import relations
 
 
 class PublisherQuerySetMixin(object):
@@ -227,22 +231,22 @@ class PublisherModelMixin(models.Model):
         assert self.publisher_is_draft_version
         old_obj = self
         new_obj = self.publisher_published_version
-        update_relations(
+        relations.update_relations(
             old_obj=old_obj,
             new_obj=new_obj,
-            exclude=ignore_stuff_to_dict(self.publisher_rewrite_ignore_stuff(old_obj=old_obj))
+            exclude=relations.ignore_stuff_to_dict(self.publisher_rewrite_ignore_stuff(old_obj=old_obj))
         )
         self.delete()
 
     @transaction.atomic
-    def publisher_publish(self, validate=True):
+    def publisher_publish(self, validate=True, delete=True, update_relations=True):
         assert self.publisher_is_draft_version
         draft = self
         if validate:
             draft.publisher_can_publish()
         now = timezone.now()
         existing_published = draft.publisher_published_version
-        if not existing_published:
+        if not existing_published and update_relations:
             # This means there is no existing published version. So we can just
             # make this draft the published version.
             # As a nice side-effect all existing ForeignKeys pointing to this
@@ -255,22 +259,30 @@ class PublisherModelMixin(models.Model):
 
         # There is an existing live version:
         # * update the live version with the data from the draft
-        published = draft.publisher_published_version
+        if existing_published:
+            published = existing_published
+        else:
+            published = draft._meta.model()
+        published.publisher_is_published_version = True
         published.publisher_published_at = now
-        published.publisher_copy_object(old_obj=self)
-        # * find any other objects still pointing to the draft version and
-        #   switch them to the live version. (otherwise cascade or set null
-        #   would yield unexpected results)
-        update_relations(
-            old_obj=draft,
-            new_obj=published,
-            exclude=ignore_stuff_to_dict(self.publisher_rewrite_ignore_stuff(old_obj=draft))
-        )
-        # * Delete draft (self)
-        draft.delete()
+        published.publisher_copy_object(old_obj=draft)  # saves
+        if update_relations:
+            # * find any other objects still pointing to the draft version and
+            #   switch them to the live version. (otherwise cascade or set null
+            #   would yield unexpected results)
+            relations.update_relations(
+                old_obj=draft,
+                new_obj=published,
+                exclude=relations.ignore_stuff_to_dict(
+                    draft.publisher_rewrite_ignore_stuff(old_obj=draft)
+                )
+            )
+        if delete:
+            # * Delete draft (self)
+            draft.delete()
         # Refresh from db to get the latest version without any cached stuff.
         # refresh_from_db() does not work in some cases because parler
-        # caches translations at _translations_cache wich may remain with stale
+        # caches translations at _translations_cache which may remain with stale
         # data.
         published = self._meta.model.objects.get(pk=published.pk)
         return published
@@ -387,3 +399,114 @@ class PublisherModelMixin(models.Model):
             return False
         from parler.models import TranslatableModel
         return isinstance(self, TranslatableModel)
+
+
+class ParlerPublisher(object):
+    def __init__(self, instance):
+        self.instance = instance
+
+    def can_publish(self):
+        # FIXME: check the model for a method to call for validation.
+        pass
+
+    @transaction.atomic
+    def publish(self, validate=True):
+        # publish the master object (but don't delete it)
+        # publish this translation
+        # delete myself (translation)
+        # if there are no other draft translations, delete the master draft
+        assert self.is_draft_version
+        if validate:
+            self.can_publish()
+        now = timezone.now()
+
+        draft_master = self.instance.master
+        draft_translation = self.instance
+
+        # Ensure we have a published master for this translation
+        published_master = draft_master.publisher_publish(
+            delete=False,
+            update_relations=False,
+        )
+
+        # Publish the translation
+        fields_to_copy = get_fields_to_copy(
+            draft_translation,
+            exclude_fields={'master', 'language_code'},
+        )
+        fields_to_copy['publisher_translation_published_at'] = now
+        published_translation, translaction_created = (
+            published_master
+            .translations
+            .update_or_create(
+                language_code=draft_translation.language_code,
+                defaults=fields_to_copy,
+            )
+        )
+        # FIXME: Call a method on the master object with the translation as
+        #        a parameter, so the developer can do custom stuff like
+        #        placeholder publication.
+
+        # Delete the draft translation
+        draft_translation.delete()
+        # FIXME: delete the master draft IF there are no other pending translation changes.
+        return published_translation
+
+    def publish_deletion(self):
+        # FIXME: implement deletion publication
+        pass
+
+    @property
+    def is_published_version(self):
+        return self.instance.master.publisher_is_published_version
+
+    @property
+    def is_draft_version(self):
+        return self.instance.master.publisher_is_draft_version
+
+    @property
+    def published_version(self):
+        if not self.instance.master.publisher_published_version_id:
+            return None
+        # FIXME: make more efficient. Use parler caches?
+        return (
+            self
+            .instance
+            .master
+            .publisher_published_version
+            .translations
+            .filter(language_code=self.instance.language_code)
+            .first()
+        )
+
+    @property
+    def draft_version(self):
+        # FIXME: make more efficient. Use parler caches?
+        published_master = self.instance.master.publisher_get_draft_version
+        if not published_master:
+            return None
+        return (
+            published_master
+            .translations
+            .filter(language_code=self.instance.language_code)
+            .first()
+        )
+
+
+from parler.models import TranslatedFields
+class ParlerPublisherTranslatedFields(TranslatedFields):
+    def __init__(self, meta=None, **fields):
+        fields['publisher_translation_published_at'] = models.DateTimeField(
+            blank=True,
+            null=True,
+            default=None,
+            editable=False,
+        )
+        fields['publisher_translation_deletion_requested'] = models.BooleanField(
+            default=False,
+            editable=False,
+            db_index=True,
+        )
+        fields['translation_publisher'] = cached_property(lambda self: ParlerPublisher(self))
+        super(ParlerPublisherTranslatedFields, self).__init__(meta, **fields)
+
