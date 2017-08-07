@@ -3,9 +3,9 @@ language: python
 sudo: false
 
 python:
-  - "3.6"
-  - "3.5"
-  - "3.4"
+#  - "3.6"
+#  - "3.5"
+#  - "3.4"
   - "2.7"
 
 install:
@@ -24,9 +24,9 @@ after_success:
 
 env:
   - DJANGO="1.8"
-  - DJANGO="1.9"
-  - DJANGO="1.10"
-  - DJANGO="1.11"
+#  - DJANGO="1.9"
+#  - DJANGO="1.10"
+#  - DJANGO="1.11"
 
 matrix:
   include:
@@ -35,40 +35,40 @@ matrix:
     - env: FLAKE8="yes"
       python: "3.6"
 
-    - os: osx
-      language: generic
-      python: "2.7"
-      env: DJANGO="1.8"
-    - os: osx
-      language: generic
-      python: "2.7"
-      env: DJANGO="1.9"
-    - os: osx
-      language: generic
-      python: "2.7"
-      env: DJANGO="1.10"
-    - os: osx
-      language: generic
-      python: "2.7"
-      env: DJANGO="1.11"
+#    - os: osx
+#      language: generic
+#      python: "2.7"
+#      env: DJANGO="1.8"
+#    - os: osx
+#      language: generic
+#      python: "2.7"
+#      env: DJANGO="1.9"
+#    - os: osx
+#      language: generic
+#      python: "2.7"
+#      env: DJANGO="1.10"
+#    - os: osx
+#      language: generic
+#      python: "2.7"
+#      env: DJANGO="1.11"
+#
+#    - os: linux
+#      python: "3.4"
+#      env: DJANGO="master"
+#    - os: linux
+#      python: "3.5"
+#      env: DJANGO="master"
+#    - os: linux
+#      python: "3.6"
+#      env: DJANGO="master"
 
-    - os: linux
-      python: "3.4"
-      env: DJANGO="master"
-    - os: linux
-      python: "3.5"
-      env: DJANGO="master"
-    - os: linux
-      python: "3.6"
-      env: DJANGO="master"
-
-  allow_failures:
-    - os: linux
-      python: "3.4"
-      env: DJANGO="master"
-    - os: linux
-      python: "3.5"
-      env: DJANGO="master"
-    - os: linux
-      python: "3.6"
-      env: DJANGO="master"
+#  allow_failures:
+#    - os: linux
+#      python: "3.4"
+#      env: DJANGO="master"
+#    - os: linux
+#      python: "3.5"
+#      env: DJANGO="master"
+#    - os: linux
+#      python: "3.6"
+#      env: DJANGO="master"
