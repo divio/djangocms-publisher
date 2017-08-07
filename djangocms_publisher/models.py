@@ -423,7 +423,7 @@ class ParlerPublisher(object):
             exclude_fields={'master', 'language_code'},
         )
         fields_to_copy['publisher_translation_published_at'] = now
-        published_translation, translaction_created = (
+        published_translation, translation_created = (
             published_master
             .translations
             .update_or_create(
@@ -442,6 +442,28 @@ class ParlerPublisher(object):
         if not draft_translation.master.translations.all().exists():
             draft_translation.master.delete()
         return published_translation
+
+    def create_draft(self):
+        assert self.is_published_version
+        published_translation = self.instance
+        draft_master, created_draft_master = self.get_or_create_draft_master()
+        fields_to_copy = get_fields_to_copy(
+            published_translation,
+            exclude_fields={'master', 'language_code'},
+        )
+        draft_translation, draft_translation_created = (
+            draft_master
+            .translations
+            .update_or_create(
+                language_code=published_translation.language_code,
+                defaults=fields_to_copy,
+            )
+        )
+        return draft_translation
+
+    def get_or_create_draft_master(self):
+        assert self.is_published_version
+        return self.instance.master.publisher_get_or_create_draft()
 
     def publish_deletion(self):
         # FIXME: implement deletion publication
