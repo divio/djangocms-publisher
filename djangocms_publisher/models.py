@@ -245,23 +245,11 @@ class PublisherModelMixin(models.Model):
         if validate:
             draft.publisher_can_publish()
         now = timezone.now()
-        existing_published = draft.publisher_published_version
-        if not existing_published and update_relations:
-            # This means there is no existing published version. So we can just
-            # make this draft the published version.
-            # As a nice side-effect all existing ForeignKeys pointing to this
-            # object will now be automatically pointing the published version.
-            # Win-win.
-            draft.publisher_is_published_version = True
-            draft.publisher_published_at = now
-            draft.save()
-            return draft
+        published = draft.publisher_published_version
 
-        # There is an existing live version:
         # * update the live version with the data from the draft
-        if existing_published:
-            published = existing_published
-        else:
+        if not published:
+            # There is no published version yet. Create one.
             published = draft._meta.model()
         published.publisher_is_published_version = True
         published.publisher_published_at = now
@@ -449,7 +437,10 @@ class ParlerPublisher(object):
 
         # Delete the draft translation
         draft_translation.delete()
-        # FIXME: delete the master draft IF there are no other pending translation changes.
+
+        # If there are no more translation drafts: delete the master draft too.
+        if not draft_translation.master.translations.all().exists():
+            draft_translation.master.delete()
         return published_translation
 
     def publish_deletion(self):

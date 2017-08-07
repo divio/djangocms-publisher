@@ -72,10 +72,9 @@ class ParlerTranslationPublishTestCase(TestCase):
         # Check that the name was correctly copied over
         self.assertEqual(draft_en.name, published_en.name)
 
-        # Check that the master draft still exists
-        # (there still is an untranslated 'en' version)
-        self.assertEqual(ParlerThing.objects.filter(id=draft.pk).exists(), True)
+        # Check that the master draft has been deleted
+        # (no more draft translations exist)
+        self.assertEqual(ParlerThing.objects.filter(id=draft.pk).exists(), False)
+        self.assertEqual(published_en.master.publisher_has_pending_changes, False)
 
-
-        import ipdb;ipdb.set_trace()
         # FIXME: Test actual fields and relationship updating
