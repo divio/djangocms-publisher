@@ -30,8 +30,8 @@ env:
 
 matrix:
   include:
-    - env: DOCS="yes"
-      python: "3.6"
+#    - env: DOCS="yes"
+#      python: "3.6"
     - env: FLAKE8="yes"
       python: "3.6"
 
