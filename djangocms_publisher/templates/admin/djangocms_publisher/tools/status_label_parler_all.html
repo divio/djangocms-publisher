@@ -1,0 +1,11 @@
+{% load i18n %}
+<ul>
+    {% for language in original.publisher_draft_or_published_translations_only_prefer_published %}
+        <li>
+            {{ language.language_code }}
+            {% with original=language %}
+                {% include 'admin/djangocms_publisher/tools/status_label_parler.html' %}
+            {% endwith %}
+        </li>
+    {% endfor %}
+</ul>

@@ -1,10 +1,10 @@
 {% load i18n %}
 {% if original.publisher_is_published_version and original.publisher_has_pending_deletion_request %}
-    <span class="filer-label filer-label-danger">{% trans 'Pending deletion' %}</span>
+    <span style="color: red; background-color: red; border-color: red;" class="cms-hover-tooltip cms-hover-tooltip-left cms-hover-tooltip-delay cms-pagetree-node-state cms-pagetree-node-state-dirty dirty" data-cms-tooltip="{% trans 'pending deletion' %}"></span>
 {% elif original.publisher_is_draft_version and original.publisher_has_pending_changes %}
-    <span class="filer-label filer-label-warning">{% trans 'Unpublished changes' %}</span>
+    <span class="cms-hover-tooltip cms-hover-tooltip-left cms-hover-tooltip-delay cms-pagetree-node-state cms-pagetree-node-state-dirty dirty" data-cms-tooltip="{% trans 'unpublished changes' %}"></span>
 {% elif original.publisher_is_draft_version and original.publisher_has_published_version %}
-    <span class="filer-label filer-label-warning">{% trans 'Not published' %}</span>
+    <span class="cms-hover-tooltip cms-hover-tooltip-left cms-hover-tooltip-delay cms-pagetree-node-state cms-pagetree-node-state-unpublished unpublished" data-cms-tooltip="{% trans 'unpublished' %}"></span>
 {% else %}
-    <span class="filer-label filer-label-warning">LIVE. don't show this</span>
+    {# Just a published version without a draft. Nothing to display #}
 {% endif %}

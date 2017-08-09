@@ -4,8 +4,13 @@ from __future__ import unicode_literals
 from collections import OrderedDict
 from copy import copy
 
+from django.forms.widgets import Media
+from parler.utils.compat import transaction_atomic
+
+from django.contrib.admin.utils import unquote
+from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, Http404
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 
@@ -13,6 +18,12 @@ from .utils.compat import PARLER_IS_INSTALLED
 
 
 class PublisherAdminMixinBase(object):
+    @property
+    def media(self):
+        # FIXME: we should rather bundle our own css for the little status dots
+        return super(PublisherAdminMixinBase, self).media + Media(
+            css={'all': ('cms/css/3.4.3/cms.pagetree.css', ), }
+        )
 
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = (
@@ -54,7 +65,7 @@ class PublisherAdminMixinBase(object):
             # Parler checks with this method for the translation specific delete
             # view as well.
             # We can't add the publisher related methods to the parler
-            # translation model. So we short-circut to use the permissions of
+            # translation model. So we short-circuit to use the permissions of
             # the shared model instead.
             from parler.models import TranslatedFieldsModel
             if isinstance(obj, TranslatedFieldsModel):
@@ -76,8 +87,7 @@ class PublisherAdminMixinBase(object):
         )
 
     def has_publish_permission(self, request, obj):
-        # FIXME: prefix this method with 'publisher_' too?
-        return True
+        return self.has_change_permission(request, obj)
 
     def publisher_get_buttons(self, request, obj):
         is_enabled = self.publisher_get_is_enabled(request, obj)
@@ -200,7 +210,30 @@ class PublisherAdminMixinBase(object):
             buttons['cancel'] = copy(defaults['cancel'])
             buttons['cancel']['url'] = self.publisher_get_admin_changelist_url(obj)
 
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        obj = self.get_object(request, object_id)
+        is_enabled = self.publisher_get_is_enabled(request, obj)
+        if is_enabled and obj and obj.publisher_is_published_version:
+            # We don't allow editing the live version. Some apps will raise
+            # validation errors if there are not fields in the POST
+            # (django-parler). So if we're on the published view, everything is
+            # is readonly anyway and there is no point in calling the whole
+            # changeform logic. Just run the publisher actions and be done with
+            # it.
+            response = self.publisher_handle_actions(request, obj)
+            if response:
+                return response
+        import ipdb; ipdb.set_trace()
+        return super(PublisherAdminMixinBase, self).change_view(
+            request, object_id, form_url=form_url, extra_context=extra_context)
+
     def response_change(self, request, obj):
+        response = self.publisher_handle_actions(request, obj)
+        if response:
+            return response
+        return super(PublisherAdminMixinBase, self).response_change(request, obj)
+
+    def publisher_handle_actions(self, request, obj):
         """
         Overrides the default response_change to handle all the publisher
         workflow actions. This is intentionally after the save has happened,
@@ -208,6 +241,7 @@ class PublisherAdminMixinBase(object):
         a draft will save current changes in the
         form before publishing.
         """
+        # FIXME: check permissions (edit)
         if request.POST and '_create_draft' in request.POST:
             if obj.publisher_is_published_version and obj.publisher_has_pending_changes:
                 # There already is a draft. Just redirect to it.
@@ -223,18 +257,20 @@ class PublisherAdminMixinBase(object):
             obj.publisher_discard_draft()
             return HttpResponseRedirect(self.publisher_get_detail_or_changelist_url(published))
         elif request.POST and '_publish' in request.POST:
+            # FIXME: check the user_can_publish() permission
+            import ipdb;ipdb.set_trace()
             published = obj.publisher_publish()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
-        elif request.POST and '_request_deletion' in request.POST:
-            published = obj.publisher_request_deletion()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
+        # elif request.POST and '_request_deletion' in request.POST:
+        #     published = obj.publisher_request_deletion()
+        #     return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
         elif request.POST and '_discard_requested_deletion' in request.POST:
             obj.publisher_discard_requested_deletion()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
-        elif request.POST and '_publish_deletion' in request.POST:
-            obj.publisher_publish_deletion()
-            return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
-        return super(PublisherAdminMixinBase, self).response_change(request, obj)
+        # elif request.POST and '_publish_deletion' in request.POST:
+        #     obj.publisher_publish_deletion()
+        #     return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
+        return None
 
     def publisher_get_status_field_context(self, obj):
         return {
@@ -283,91 +319,3 @@ def get_all_button_defaults():
 
 class PublisherAdminMixin(PublisherAdminMixinBase):
     change_form_template = 'admin/djangocms_publisher/publisher_change_form.html'
-
-
-class PublisherParlerAdminMixin(PublisherAdminMixinBase):
-
-    def get_language_tabs(self, request, obj, available_languages, css_class=None):
-        """
-        Determine the language tabs to show.
-        """
-        tabs = super(PublisherParlerAdminMixin, self).get_language_tabs(
-            request,
-            obj=obj,
-            available_languages=available_languages,
-            css_class=css_class,
-        )
-        if not obj or obj and not obj.pk:
-            # Is this ok to do?
-            return tabs
-
-        languages = [tab[2] for tab in tabs]
-
-        if obj.publisher_is_published_version:
-            draft_translations = obj.publisher_has_pending_changes
-            published_translations = obj.translations.filter(language_code__in=languages)
-
-            if obj.publisher_has_pending_changes:
-                draft_translations = obj.publisher_draft_version.translations.filter(language_code__in=languages)
-            else:
-                draft_translations = published_translations.none()
-        else:
-            draft_translations = obj.translations.filter(language_code__in=languages)
-
-            if obj.publisher_has_published_version:
-                published_translations = obj.publisher_published_version.translations.filter(language_code__in=languages)
-            else:
-                published_translations = draft_translations.none()
-
-        draft_translations_by_language = {trans.language_code: trans for trans in draft_translations}
-        published_translations_by_language = {trans.language_code: trans for trans in published_translations}
-
-        for pos, tab in enumerate(tabs):
-            language = tab[2]
-            draft_translation = draft_translations_by_language.get(language)
-            published_translation = published_translations_by_language.get(language)
-
-            if published_translation and obj.publisher_is_draft_version:
-                # change link to point to published version of language
-                url_name = 'admin:%s_%s_%s' % (self.opts.app_label, self.opts.model_name, 'change')
-                tabs[pos] = list(tabs[pos])
-                tabs[pos][0] = reverse(url_name, args=[published_translation.master_id])
-            elif not published_translation and obj.publisher_is_published_version:
-                # User is on published version of master object
-                # but there's no published version for tab language
-                if draft_translation:
-                    # Link directly to the draft version
-                    url_name = 'admin:%s_%s_%s' % (self.opts.app_label, self.opts.model_name, 'change')
-                    tabs[pos] = list(tabs[pos])
-                    tabs[pos][0] = reverse(url_name, args=[draft_translation.master_id])
-                else:
-                    # Link to custom endpoint that creates draft version
-                    # of master and/or draft version of language
-                    tabs[pos] = list(tabs[pos])
-                    tabs[pos][0] = ''
-        return tabs
-
-    def get_readonly_fields(self, request, obj=None):
-        readonly_fields = (
-            super(PublisherParlerAdminMixin, self)
-            .get_readonly_fields(request, obj=obj)
-        )
-        if not obj or obj and not obj.publisher_is_published_version:
-            return readonly_fields
-        readonly_fields = set(readonly_fields)
-        readonly_fields |= set(obj._parler_meta.get_translated_fields())
-        return list(readonly_fields)
-
-    def get_change_form_base_template(self):
-        """
-        Determine what the actual `change_form_template` should be.
-        """
-        from parler.admin import _lazy_select_template_name
-        opts = self.model._meta
-        app_label = opts.app_label
-        return _lazy_select_template_name((
-            "admin/{0}/{1}/publisher_hange_form.html".format(app_label, opts.object_name.lower()),
-            "admin/{0}/publisher_change_form.html".format(app_label),
-            "admin/publisher_change_form.html",
-            "admin/djangocms_publisher/publisher_change_form.html",
-        ))

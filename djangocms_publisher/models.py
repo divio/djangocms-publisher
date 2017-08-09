@@ -17,6 +17,17 @@ from .utils.copying import (
 from .utils import relations
 
 
+PUBLISHER_STATE_CHOICES = (
+    ('published', 'Published'),
+    ('not_published', 'Not published'),
+    ('pending_changes', 'Published, pending changes'),
+    ('pending_deletion', 'Published, pending deletion'),
+    # nocontent is for a case where there is no content at all, neither
+    # draft nor published. Only relevant for translations of a main object.
+    ('empty', 'No Content'),
+)
+
+
 class PublisherQuerySetMixin(object):
     def publisher_published(self):
         return self.filter(publisher_is_published_version=True)
@@ -215,12 +226,14 @@ class PublisherModelMixin(models.Model):
     def publisher_get_or_create_draft(self):
         if self.publisher_is_draft_version:
             return self, False
-        elif (
+
+        if (
             self.publisher_is_published_version and
             self.publisher_has_pending_changes
         ):
             return self.publisher_draft_version, False
-        elif (
+
+        if (
             self.publisher_is_published_version and
             not self.publisher_has_pending_changes
         ):
@@ -239,8 +252,18 @@ class PublisherModelMixin(models.Model):
         self.delete()
 
     @transaction.atomic
-    def publisher_publish(self, validate=True, delete=True, update_relations=True):
+    def publisher_publish(self, validate=True, delete=None, update_relations=None):
         assert self.publisher_is_draft_version
+        is_parler_model = self.publisher_is_parler_master_model
+        if delete is None:
+            # Don't delete the master with parler, the translation takes care of
+            # that if necessary.
+            delete = not is_parler_model
+        if update_relations is None:
+            # Don't update relations of the master with parler, the translation
+            # takes care of that if necessary.
+            update_relations = not is_parler_model
+
         draft = self
         if validate:
             draft.publisher_can_publish()
@@ -382,144 +405,8 @@ class PublisherModelMixin(models.Model):
             return '{}'.format(label)
 
     @cached_property
-    def publisher_is_parler_model(self):
+    def publisher_is_parler_master_model(self):
         if not PARLER_IS_INSTALLED:
             return False
         from parler.models import TranslatableModel
         return isinstance(self, TranslatableModel)
-
-
-class ParlerPublisher(object):
-    def __init__(self, instance):
-        self.instance = instance
-
-    def can_publish(self):
-        # FIXME: check the model for a method to call for validation.
-        pass
-
-    @transaction.atomic
-    def publish(self, validate=True):
-        # publish the master object (but don't delete it)
-        # publish this translation
-        # delete myself (translation)
-        # if there are no other draft translations, delete the master draft
-        assert self.is_draft_version
-        if validate:
-            self.can_publish()
-        now = timezone.now()
-
-        draft_master = self.instance.master
-        draft_translation = self.instance
-
-        # Ensure we have a published master for this translation
-        published_master = draft_master.publisher_publish(
-            delete=False,
-            update_relations=False,
-        )
-
-        # Publish the translation
-        fields_to_copy = get_fields_to_copy(
-            draft_translation,
-            exclude_fields={'master', 'language_code'},
-        )
-        fields_to_copy['publisher_translation_published_at'] = now
-        published_translation, translation_created = (
-            published_master
-            .translations
-            .update_or_create(
-                language_code=draft_translation.language_code,
-                defaults=fields_to_copy,
-            )
-        )
-        # FIXME: Call a method on the master object with the translation as
-        #        a parameter, so the developer can do custom stuff like
-        #        placeholder publication.
-
-        # Delete the draft translation
-        draft_translation.delete()
-
-        # If there are no more translation drafts: delete the master draft too.
-        if not draft_translation.master.translations.all().exists():
-            draft_translation.master.delete()
-        return published_translation
-
-    def create_draft(self):
-        assert self.is_published_version
-        published_translation = self.instance
-        draft_master, created_draft_master = self.get_or_create_draft_master()
-        fields_to_copy = get_fields_to_copy(
-            published_translation,
-            exclude_fields={'master', 'language_code'},
-        )
-        draft_translation, draft_translation_created = (
-            draft_master
-            .translations
-            .update_or_create(
-                language_code=published_translation.language_code,
-                defaults=fields_to_copy,
-            )
-        )
-        return draft_translation
-
-    def get_or_create_draft_master(self):
-        assert self.is_published_version
-        return self.instance.master.publisher_get_or_create_draft()
-
-    def publish_deletion(self):
-        # FIXME: implement deletion publication
-        pass
-
-    @property
-    def is_published_version(self):
-        return self.instance.master.publisher_is_published_version
-
-    @property
-    def is_draft_version(self):
-        return self.instance.master.publisher_is_draft_version
-
-    @property
-    def published_version(self):
-        if not self.instance.master.publisher_published_version_id:
-            return None
-        # FIXME: make more efficient. Use parler caches?
-        return (
-            self
-            .instance
-            .master
-            .publisher_published_version
-            .translations
-            .filter(language_code=self.instance.language_code)
-            .first()
-        )
-
-    @property
-    def draft_version(self):
-        # FIXME: make more efficient. Use parler caches?
-        published_master = self.instance.master.publisher_get_draft_version
-        if not published_master:
-            return None
-        return (
-            published_master
-            .translations
-            .filter(language_code=self.instance.language_code)
-            .first()
-        )
-
-
-from parler.models import TranslatedFields
-class ParlerPublisherTranslatedFields(TranslatedFields):
-    def __init__(self, meta=None, **fields):
-        fields['publisher_translation_published_at'] = models.DateTimeField(
-            blank=True,
-            null=True,
-            default=None,
-            editable=False,
-        )
-        fields['publisher_translation_deletion_requested'] = models.BooleanField(
-            default=False,
-            editable=False,
-            db_index=True,
-        )
-        fields['translation_publisher'] = cached_property(lambda self: ParlerPublisher(self))
-        super(ParlerPublisherTranslatedFields, self).__init__(meta, **fields)
-
