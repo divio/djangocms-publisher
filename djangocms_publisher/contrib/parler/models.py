@@ -114,15 +114,17 @@ class ParlerPublisher(object):
             draft_translation.master.delete()
         return published_translation
 
+    @transaction.atomic
     def create_draft(self):
         assert self.is_published_version
         published_translation = self.instance
+        if self.has_pending_deletion_request:
+            self.discard_requested_deletion()
         draft_master, created_draft_master = self.get_or_create_draft_master()
         fields_to_copy = get_fields_to_copy(
             published_translation,
             exclude_fields={'master', 'language_code'},
         )
-        print(fields_to_copy)
         draft_translation, draft_translation_created = (
             draft_master
             .translations
@@ -137,6 +139,7 @@ class ParlerPublisher(object):
         assert self.is_published_version
         return self.instance.master.publisher_get_or_create_draft()
 
+    @transaction.atomic
     def request_deletion(self):
         assert (
             self.is_draft_version and self.has_published_version or
@@ -155,6 +158,14 @@ class ParlerPublisher(object):
         if draft_translation:
             draft_translation.delete()
         return refresh_from_db(self.instance)
+
+    @transaction.atomic
+    def discard_requested_deletion(self):
+        assert self.is_published_version
+        self.instance.publisher_translation_deletion_requested = False
+        self.instance.save(
+            update_fields=['publisher_translation_deletion_requested']
+        )
 
     @property
     def has_pending_changes(self):
