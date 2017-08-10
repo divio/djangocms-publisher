@@ -5,12 +5,8 @@ from collections import OrderedDict
 from copy import copy
 
 from django.forms.widgets import Media
-from parler.utils.compat import transaction_atomic
-
-from django.contrib.admin.utils import unquote
-from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 
@@ -105,7 +101,7 @@ class PublisherAdminMixinBase(object):
             obj.publisher_is_published_version and
             not obj.publisher_has_pending_changes
         ):
-            # This is the case when we've disable the whole draft/live
+            # This is the case when we've disabled the whole draft/live
             # functionality. We just show the default django buttons.
             self._publisher_get_buttons_default(
                 buttons=buttons,
@@ -116,6 +112,7 @@ class PublisherAdminMixinBase(object):
             return buttons
 
         if obj and obj.pk and obj.publisher_is_draft_version and has_change_permission:
+            # Editing a draft version
             buttons['save'] = copy(defaults['save'])
             buttons['save_and_continue'] = copy(defaults['save_and_continue'])
 
@@ -124,7 +121,7 @@ class PublisherAdminMixinBase(object):
             not obj.publisher_is_published_version and
             has_delete_permission
         ):
-            # Not published drafts can be deleted the usual way
+            # A not published draft can be deleted the normal way
             buttons['delete'] = copy(defaults['delete'])
 
         if add_mode:
@@ -223,7 +220,6 @@ class PublisherAdminMixinBase(object):
             response = self.publisher_handle_actions(request, obj)
             if response:
                 return response
-        import ipdb; ipdb.set_trace()
         return super(PublisherAdminMixinBase, self).change_view(
             request, object_id, form_url=form_url, extra_context=extra_context)
 
@@ -247,7 +243,7 @@ class PublisherAdminMixinBase(object):
                 # There already is a draft. Just redirect to it.
                 return HttpResponseRedirect(
                     self.publisher_get_detail_admin_url(
-                        obj.publisher_draft_versiondraft
+                        obj.publisher_draft_version
                     )
                 )
             draft = obj.publisher_create_draft()
@@ -261,15 +257,15 @@ class PublisherAdminMixinBase(object):
             import ipdb;ipdb.set_trace()
             published = obj.publisher_publish()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
-        # elif request.POST and '_request_deletion' in request.POST:
-        #     published = obj.publisher_request_deletion()
-        #     return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
+        elif request.POST and '_request_deletion' in request.POST:
+            published = obj.publisher_request_deletion()
+            return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
         elif request.POST and '_discard_requested_deletion' in request.POST:
             obj.publisher_discard_requested_deletion()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
-        # elif request.POST and '_publish_deletion' in request.POST:
-        #     obj.publisher_publish_deletion()
-        #     return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
+        elif request.POST and '_publish_deletion' in request.POST:
+            obj.publisher_publish_deletion()
+            return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
         return None
 
     def publisher_get_status_field_context(self, obj):

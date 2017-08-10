@@ -73,6 +73,18 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
                     tabs[pos][0] = tabs[pos][0] + '&CUSTOM_ENDPOINT_TO_CREATE_A_DRAFT_VERSION=True'
         return tabs
 
+    def publisher_get_buttons(self, request, obj):
+        # HACK to keep the current language when navigating between draft and
+        # published.
+        buttons = (
+            super(PublisherParlerAdminMixin, self)
+            .publisher_get_buttons(request, obj)
+        )
+        for button in buttons.values():
+            if 'language' in request.GET and 'url' in button:
+                button['url'] = button['url'] + '?language={}'.format(request.GET['language'])
+        return buttons
+
     @transaction_atomic
     def delete_translation(self, request, object_id, language_code):
         root_model = self.model._parler_meta.root_model
@@ -89,7 +101,6 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             translation.translation_publisher.is_draft_version and
             not translation.translation_publisher.has_published_version
         )
-        import ipdb; ipdb.set_trace()
         if (
             is_published_version_and_deletion_already_requested or
             is_draft_version_and_no_published_version_exists
@@ -155,26 +166,28 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             .publisher_get_admin_changelist_url(master)
         )
 
-    def publisher_get_detail_admin_url(self, obj):
-        app_label = obj._meta.app_label
-        model_name = obj._meta.model_name
-        from parler.models import TranslatedFieldsModel
-        is_parler_translation = isinstance(obj, TranslatedFieldsModel)
-        if is_parler_translation:
-            # the url should needs to use the id of the master object.
-            master = obj.master
-            translation = obj
-            model_name = master._meta.model_name
-        else:
-            master = obj
-            translation = None
-        url = reverse(
-            'admin:{}_{}_change'.format(app_label, model_name),
-            args=(master.pk,),
-        )
-        if is_parler_translation:
-            url = url + '?language={}'.format(translation.language_code)
-        return url
+    # def publisher_get_detail_admin_url(self, obj):
+    #     app_label = obj._meta.app_label
+    #     model_name = obj._meta.model_name
+    #
+    #     from parler.models import TranslatedFieldsModel
+    #     if isinstance(obj, TranslatedFieldsModel):
+    #         # The url needs to use the id of the master object.
+    #         master = obj.master
+    #         language_code = obj.language_code
+    #         model_name = master._meta.model_name
+    #     else:
+    #         master = obj
+    #         language_code = getattr(obj, 'language_code', None)
+    #     print model_name, master, language_code
+    #     url = reverse(
+    #         'admin:{}_{}_change'.format(app_label, model_name),
+    #         args=(master.pk,),
+    #     )
+    #     if language_code:
+    #         url = url + '?language={}'.format(language_code)
+    #     print url
+    #     return url
 
     def publisher_handle_actions(self, request, obj):
         """

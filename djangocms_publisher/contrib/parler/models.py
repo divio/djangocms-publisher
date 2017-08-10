@@ -125,6 +125,7 @@ class ParlerPublisher(object):
             published_translation,
             exclude_fields={'master', 'language_code'},
         )
+        print(fields_to_copy)
         draft_translation, draft_translation_created = (
             draft_master
             .translations
