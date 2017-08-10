@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, Http404
 from django.template.loader import render_to_string
-from .admin import PublisherAdminMixinBase
+from ...admin import PublisherAdminMixinBase
 
 
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):

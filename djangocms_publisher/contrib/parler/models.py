@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
 
-from django.core.exceptions import ObjectDoesNotExist
 from django.db import models, transaction
-from django.db.models import Q
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
-from .utils.compat import PARLER_IS_INSTALLED
-from .utils.copying import (
+from ...utils.copying import (
     get_fields_to_copy,
     refresh_from_db)
-from .models import PUBLISHER_STATE_CHOICES, PublisherModelMixin
+from ...models import PUBLISHER_STATE_CHOICES, PublisherModelMixin
 
 
 class ParlerPublisherModelMixin(PublisherModelMixin):
