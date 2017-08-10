@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
+from copy import copy
 from parler.utils.compat import transaction_atomic
 
 from django.contrib.admin.utils import unquote

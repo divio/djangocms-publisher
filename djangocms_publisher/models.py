@@ -410,3 +410,38 @@ class PublisherModelMixin(models.Model):
             return False
         from parler.models import TranslatableModel
         return isinstance(self, TranslatableModel)
+
+    @property
+    def publisher_state(self):
+        choices = dict(PUBLISHER_STATE_CHOICES)
+        published = self.publisher_get_published_version()
+        draft = self.publisher_get_draft_version()
+        is_published = bool(published)
+        has_pending_changes = bool(draft)
+        has_pending_deletion_request = (
+            published and published.publisher_has_pending_deletion_request
+        )
+        state_dict = {
+            'is_published': is_published,
+            'has_pending_changes': has_pending_changes,
+            'has_pending_deletion_request': has_pending_deletion_request,
+        }
+        if has_pending_deletion_request:
+            state_id = 'pending_deletion'
+            css_class = 'pending_deletion'
+        elif is_published and has_pending_changes:
+            state_id = 'pending_changes'
+            css_class = 'dirty'
+        elif is_published and not has_pending_changes:
+            state_id = 'published'
+            css_class = 'published'
+        elif not is_published and has_pending_changes:
+            state_id = 'not_published'
+            css_class = 'unpublished'
+        else:
+            state_id = 'empty'
+            css_class = 'empty'
+        state_dict['identifier'] = state_id
+        state_dict['css_class'] = css_class
+        state_dict['text'] = choices[state_id]
+        return state_dict

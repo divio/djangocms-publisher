@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
 
+from collections import OrderedDict
+
+from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -45,6 +48,25 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
                 else:
                     result.append(versions['draft'])
         return result
+
+    def publisher_translations_state(self):
+        all_language_codes = [itm[0] for itm in settings.LANGUAGES]
+        all_translations = {
+            trans.language_code: trans
+            for trans in self.publisher_all_translations(prefer_drafts=False)
+        }
+        all_states = OrderedDict()
+        for language_code in all_language_codes:
+            if language_code in all_translations:
+                all_states[language_code] = all_translations[language_code].translation_publisher.state
+            else:
+                all_states[language_code] = {
+                    'identifier': 'empty',
+                    'css_class': 'empty',
+                    'text': _('Does not exist'),
+                    'language_code': language_code,
+                }
+        return all_states.values()
 
     def publisher_draft_or_published_translations_only_prefer_drafts(self):
         return self.publisher_all_translations(prefer_drafts=True)
@@ -108,7 +130,6 @@ class ParlerPublisher(object):
 
         # Delete the draft translation
         draft_translation.delete()
-
         # If there are no more translation drafts: delete the master draft too.
         if not draft_translation.master.translations.all().exists():
             draft_translation.master.delete()
@@ -116,6 +137,7 @@ class ParlerPublisher(object):
 
     @transaction.atomic
     def create_draft(self):
+        import ipdb; ipdb.set_trace()
         assert self.is_published_version
         published_translation = self.instance
         if self.has_pending_deletion_request:
@@ -237,10 +259,15 @@ class ParlerPublisher(object):
         is_published = bool(published)
         has_pending_changes = bool(draft)
         has_pending_deletion_request = published and published.translation_publisher.has_pending_deletion_request
+        if published:
+            language_code = published.language_code
+        else:
+            language_code = draft.language_code
         state_dict = {
             'is_published': is_published,
             'has_pending_changes': has_pending_changes,
             'has_pending_deletion_request': has_pending_deletion_request,
+            'language_code': language_code,
         }
         if has_pending_deletion_request:
             state_id = 'pending_deletion'
