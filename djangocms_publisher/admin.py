@@ -159,12 +159,13 @@ class PublisherAdminMixinBase(object):
         if has_delete_permission:
             buttons['delete'] = copy(defaults['delete'])
 
-    def _publisher_get_buttons_edit(self, buttons, defaults, obj, has_publish_permission, has_delete_permission, request):
-        for action in obj.publisher_available_actions(request.user).values():
-            action_name = action['name']
-            buttons[action_name] = copy(defaults[action_name])
-            buttons[action_name].update(action)
-            buttons[action_name]['field_name'] = '_{}'.format(action_name)
+    def _publisher_get_buttons_edit(self, buttons, defaults, obj, has_publish_permission, has_delete_permission, request, actions=None):
+        if actions is None:
+            for action in obj.publisher_available_actions(request.user).values():
+                action_name = action['name']
+                buttons[action_name] = copy(defaults[action_name])
+                buttons[action_name].update(action)
+                buttons[action_name]['field_name'] = '_{}'.format(action_name)
 
         if not has_publish_permission:
             for action_name in ('publish', 'publish_deletion'):
@@ -254,7 +255,6 @@ class PublisherAdminMixinBase(object):
             return HttpResponseRedirect(self.publisher_get_detail_or_changelist_url(published))
         elif request.POST and '_publish' in request.POST:
             # FIXME: check the user_can_publish() permission
-            import ipdb;ipdb.set_trace()
             published = obj.publisher_publish()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
         elif request.POST and '_request_deletion' in request.POST:

@@ -137,7 +137,6 @@ class ParlerPublisher(object):
 
     @transaction.atomic
     def create_draft(self):
-        import ipdb; ipdb.set_trace()
         assert self.is_published_version
         published_translation = self.instance
         if self.has_pending_deletion_request:
@@ -289,6 +288,36 @@ class ParlerPublisher(object):
         state_dict['text'] = choices[state_id]
         return state_dict
 
+    def available_actions(self, user):
+        actions = {}
+        if self.has_pending_deletion_request:
+            actions['discard_requested_deletion'] = {}
+            actions['publish_deletion'] = {}
+        if self.is_draft_version and self.has_pending_changes:
+            actions['publish'] = {}
+        if (
+            self.is_draft_version and
+            self.has_pending_changes and
+            self.has_published_version
+        ):
+            actions['discard_draft'] = {}
+        if self.is_published_version and not self.has_pending_changes:
+            actions['create_draft'] = {}
+        for action_name, data in actions.items():
+            data['name'] = action_name
+            if action_name in ('publish', 'publish_deletion'):
+                # FIXME: do actual permission check
+                data['has_permission'] = user.is_superuser
+            else:
+                data['has_permission'] = True
+        return actions
+
+    def allowed_actions(self, user):
+        return [
+            action
+            for action, data in self.available_actions(user).items()
+            if data['has_permission']
+        ]
 
 from parler.models import TranslatedFields
 

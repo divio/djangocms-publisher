@@ -12,7 +12,7 @@ from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 from django.utils.encoding import force_text
-from ...admin import PublisherAdminMixinBase
+from ...admin import PublisherAdminMixinBase, get_all_button_defaults
 
 
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
@@ -88,10 +88,38 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         language_code = request.GET.get('language_code')
         if not language_code:
             language_code = getattr(obj, 'language_code', None)
-            if language_code:
-                print "GIT IT FRIM OBK", language_code
         if not language_code:
             return buttons
+        translation = obj.translations.get(language_code=language_code)
+        defaults = get_all_button_defaults()
+        if (
+            translation.translation_publisher.is_published_version and
+            translation.translation_publisher.has_pending_changes
+        ):
+            # In this case we need to put the correct action here for linking
+            # to the draft instead of creating it.
+            buttons.pop('create_draft', None)
+            action_name = 'edit_draft'
+            buttons[action_name] = copy(defaults[action_name])
+            buttons[action_name]['url'] = self.publisher_get_detail_admin_url(
+                obj.publisher_draft_version,
+                language_code=language_code,
+            )
+            buttons[action_name]['has_permission'] = True
+        elif (
+            translation.translation_publisher.is_published_version and
+            not translation.translation_publisher.has_pending_changes
+        ):
+            # In this case we need to put the correct action here for linking
+            # to the draft instead of creating it.
+            buttons.pop('edit_draft', None)
+            action_name = 'create_draft'
+            buttons[action_name] = copy(defaults[action_name])
+            buttons[action_name].update(
+                translation.translation_publisher.available_actions(request.user)[action_name]
+            )
+            buttons[action_name]['field_name'] = '_{}'.format(action_name)
+
         for name, button in buttons.items():
             # Add the language to the button labels for clarity
             if name in (
