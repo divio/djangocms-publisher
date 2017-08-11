@@ -74,6 +74,12 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
     def publisher_draft_or_published_translations_only_prefer_published(self):
         return self.publisher_all_translations(prefer_drafts=False)
 
+    def publisher_copy_relations_for_translation(self, old_obj, language_code):
+        # old_obj is the old master obj. At this point self (new_obj) and
+        # old_obj both have a translation object for the language_code in
+        # question
+        pass
+
     class Meta:
         abstract = True
 
@@ -124,9 +130,10 @@ class ParlerPublisher(object):
                 defaults=fields_to_copy,
             )
         )
-        # FIXME: Call a method on the master object with the translation as
-        #        a parameter, so the developer can do custom stuff like
-        #        placeholder publication.
+
+        published_translation.translation_publisher.copy_relations(
+            old_obj=draft_translation,
+        )
 
         # Delete the draft translation
         draft_translation.delete()
@@ -154,7 +161,21 @@ class ParlerPublisher(object):
                 defaults=fields_to_copy,
             )
         )
+        draft_translation.translation_publisher.copy_relations(
+            old_obj=published_translation,
+        )
         return draft_translation
+
+    def copy_relations(self, old_obj):
+        import ipdb; ipdb.set_trace()
+        # Call a method on the master object so any app specific releations can
+        # be copied (e.g Placeholders or relations on the translated obj)
+        new_translation = self.instance
+        old_translation = old_obj
+        new_translation.master.publisher_copy_relations_for_translation(
+            old_obj=old_translation.master,
+            language_code=new_translation.language_code,
+        )
 
     def get_or_create_draft_master(self):
         assert self.is_published_version

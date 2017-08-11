@@ -107,7 +107,7 @@ def copy_parler_translations(
 def copy_placeholder(
     old_placeholder,
     new_placeholder,
-    lanuage_code,
+    language_code,
 ):
     # stolen from cms.models.pagemodel.Page._copy_contents()
     from cms.models.pluginmodel import CMSPlugin
@@ -115,7 +115,7 @@ def copy_placeholder(
 
     for plugin in (
             CMSPlugin.objects
-            .filter(placeholder=new_placeholder, language_code=lanuage_code)
+            .filter(placeholder=new_placeholder, language=language_code)
             .order_by('-depth')
     ):
         inst, cls = plugin.get_plugin_instance()
@@ -127,7 +127,7 @@ def copy_placeholder(
             plugin._no_reorder = True
             plugin.delete(no_mp=True)
 
-    plugins = old_placeholder.get_plugins_list()
+    plugins = old_placeholder.get_plugins_list(language=language_code)
     copy_plugins_to(plugins, new_placeholder)
 
 
