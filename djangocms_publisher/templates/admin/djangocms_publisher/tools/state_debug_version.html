@@ -1,0 +1,7 @@
+{% if version %}
+<pre{% if obj == version %} style="background-color: darkgray;"{% endif %}>id:{{ version.id }} type:{% if version.publisher_is_draft_version %}draft{% else %}published{% endif %} has_pending_changes:{{ version.publisher_has_pending_changes }}
+{% for translation in version.translations.all %}    id:{{ translation.id }} {{ translation.language_code }} {{ translation.slug }} "{{ translation.title }}"
+{% endfor %}</pre>
+{% else %}
+<pre>None</pre>
+{% endif %}
