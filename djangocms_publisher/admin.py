@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 from collections import OrderedDict
 from copy import copy
 
+from cms.utils.urlutils import static_with_version
 from django.forms.widgets import Media
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
@@ -20,7 +21,7 @@ class PublisherAdminMixinBase(object):
         return super(PublisherAdminMixinBase, self).media + Media(
             css={
                 'all': (
-                    'djangocms_publisher/css/djangocms_publisher.admin.css',
+                    static_with_version('cms/css/cms.pagetree.css'),
                 ),
             },
         )
