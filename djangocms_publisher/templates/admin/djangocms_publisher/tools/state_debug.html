@@ -1,7 +1,4 @@
-State:
 <pre>{% for key, value in obj.publisher_state.items|dictsort:'0.lower' %}{{ key }}: {{ value }}
 {% endfor %}</pre>
-Draft:
 {% include 'admin/djangocms_publisher/tools/state_debug_version.html' with version=obj.publisher_get_draft_version %}
-Published:
 {% include 'admin/djangocms_publisher/tools/state_debug_version.html' with version=obj.publisher_get_published_version %}
