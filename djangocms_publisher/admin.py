@@ -18,7 +18,11 @@ class PublisherAdminMixinBase(object):
     def media(self):
         # FIXME: we should rather bundle our own css for the little status dots
         return super(PublisherAdminMixinBase, self).media + Media(
-            css={'all': ('cms/css/3.4.3/cms.pagetree.css', ), }
+            css={
+                'all': (
+                    'djangocms_publisher/css/djangocms_publisher.admin.css',
+                ),
+            },
         )
 
     def get_readonly_fields(self, request, obj=None):
