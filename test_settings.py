@@ -14,7 +14,7 @@ HELPER_SETTINGS = {
     'NOSE_ARGS': [
         '-s',
     ],
-    'ROOT_URLCONF': 'filer.test_utils.urls',
+    'ROOT_URLCONF': 'djangocms_publisher.test_project.urls',
     'INSTALLED_APPS': [
         'parler',
         'djangocms_publisher',

@@ -1,6 +1,6 @@
 {% load i18n %}
 <ul>
-    {% for state in original.publisher_translations_state %}
+    {% for state in original.publisher.translation_states %}
         <li>
             {{ state.language_code }}
             {% include 'admin/djangocms_publisher/tools/status_indicator.html' %}

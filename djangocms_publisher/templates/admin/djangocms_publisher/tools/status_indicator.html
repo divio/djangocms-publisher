@@ -3,12 +3,12 @@
         style="color: red; background-color: red; border-color: red;"
         class="cms-hover-tooltip cms-hover-tooltip-left cms-hover-tooltip-delay cms-pagetree-node-state cms-pagetree-node-state-dirty dirty"
         data-cms-tooltip="{{ state.language_code|upper }}: {{ state.text }}"
-        title="{{ state.language_code|upper }}: {{ state.text }}"
+        title="{% if state.language_code %}{{ state.language_code|upper }}: {% endif %}{{ state.text }}"
     ></span>
 {% else %}
     <span
         class="cms-hover-tooltip cms-hover-tooltip-left cms-hover-tooltip-delay cms-pagetree-node-state cms-pagetree-node-state-{{ state.css_class }} {{ state.css_class }}"
         data-cms-tooltip="{{ state.language_code|upper }}: {{ state.text }}"
-        title="{{ state.language_code|upper }}: {{ state.text }}"
+        title="{% if state.language_code %}{{ state.language_code|upper }}: {% endif %}{{ state.text }}"
     ></span>
 {% endif %}

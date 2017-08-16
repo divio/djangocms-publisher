@@ -85,10 +85,6 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
 
 
 class ParlerPublisher(object):
-    # FIXME: easy listing of all translations (draft and published)
-    #        from both the draft and published master object so a
-    #        complete translation publishing state can be listed from
-    #        both the draft and the published master object. (e.g admin)
     def __init__(self, instance):
         self.instance = instance
 

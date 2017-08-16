@@ -1,4 +1,4 @@
 {% load i18n %}
-{% with state=original.publisher_state %}
+{% with state=original.publisher.state %}
     {% include 'admin/djangocms_publisher/tools/status_indicator.html' %}
 {% endwith %}

@@ -39,15 +39,15 @@ class Thing(PublisherModelMixin, models.Model):
     name = models.CharField(max_length=255)
     a_boolean = models.BooleanField(blank=True, default=False)
 
-    related_things = models.ManyToManyField('self', symmetrical=False)
-    related_things_symmetrical = models.ManyToManyField('self', symmetrical=True)
+    related_things = models.ManyToManyField('self', symmetrical=False, blank=True)
+    related_things_symmetrical = models.ManyToManyField('self', symmetrical=True, blank=True)
 
-    many_to_many_attachments = models.ManyToManyField('ThingAttachment', blank=True)
+    many_to_many_attachments = models.ManyToManyField('ThingAttachment', blank=True, related_name='many_to_many_things')
 
     objects = ThingQuerySet.as_manager()
 
     def __str__(self):
-        return self.publisher_add_status_label(self.name)
+        return self.publisher.add_status_label(self.name)
 
     def __repr__(self):
         return _repr(self, extra={'type': 'published' if self.publisher_is_published_version else 'draft'})

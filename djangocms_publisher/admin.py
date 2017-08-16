@@ -62,25 +62,25 @@ class PublisherAdminMixinBase(object):
         return True
 
     def has_delete_permission(self, request, obj=None):
-        if PARLER_IS_INSTALLED:
-            # Parler checks with this method for the translation specific delete
-            # view as well.
-            # We can't add the publisher related methods to the parler
-            # translation model. So we short-circuit to use the permissions of
-            # the shared model instead.
-            from parler.models import TranslatedFieldsModel
-            if isinstance(obj, TranslatedFieldsModel):
-                obj = obj.master
-                # FIXME: make this work
-                return True
-        if obj and obj.pk and obj.publisher_is_published_version:
+        # if PARLER_IS_INSTALLED:
+        #     # Parler checks with this method for the translation specific delete
+        #     # view as well.
+        #     # We can't add the publisher related methods to the parler
+        #     # translation model. So we short-circuit to use the permissions of
+        #     # the shared model instead.
+        #     from parler.models import TranslatedFieldsModel
+        #     if isinstance(obj, TranslatedFieldsModel):
+        #         obj = obj.master
+        #         # FIXME: make this work
+        #         return True
+        if obj and obj.pk and obj.publisher.is_published_version:
             if (
-                obj.publisher_has_pending_deletion_request and
+                obj.publisher.has_pending_deletion_request and
                 self.has_publish_permission(request, obj)
             ):
                 return True
             return False
-        elif obj and obj.pk and obj.publisher_is_draft_version and obj.publisher_has_published_version:
+        elif obj and obj.pk and obj.publisher.is_draft_version and obj.publisher.has_published_version:
             return False
         return (
             super(PublisherAdminMixinBase, self)
@@ -116,13 +116,13 @@ class PublisherAdminMixinBase(object):
             )
             return buttons
 
-        if obj and obj.pk and obj.publisher_is_draft_version and has_change_permission:
+        if obj and obj.pk and obj.publisher.is_draft_version and has_change_permission:
             # Editing a draft version
             buttons['save'] = copy(defaults['save'])
             buttons['save_and_continue'] = copy(defaults['save_and_continue'])
 
         if (
-            obj and obj.pk and obj.publisher_is_draft_version and
+            obj and obj.pk and obj.publisher.is_draft_version and
             not obj.publisher_is_published_version and
             has_delete_permission
         ):
@@ -166,7 +166,7 @@ class PublisherAdminMixinBase(object):
 
     def _publisher_get_buttons_edit(self, buttons, defaults, obj, has_publish_permission, has_delete_permission, request, actions=None):
         if actions is None:
-            for action in obj.publisher_available_actions(request.user).values():
+            for action in obj.publisher.available_actions(request.user).values():
                 action_name = action['name']
                 buttons[action_name] = copy(defaults[action_name])
                 buttons[action_name].update(action)
@@ -178,29 +178,29 @@ class PublisherAdminMixinBase(object):
                     buttons[action_name]['has_permission'] = False
 
         # Additional links
-        if obj.publisher_is_published_version and obj.publisher_has_pending_changes:
+        if obj.publisher.is_published_version and obj.publisher.has_pending_changes:
             # Add a link for editing an existing draft
             action_name = 'edit_draft'
             buttons[action_name] = copy(defaults[action_name])
-            buttons[action_name]['url'] = self.publisher_get_detail_admin_url(obj.publisher_draft_version)
+            buttons[action_name]['url'] = self.publisher_get_detail_admin_url(obj.publisher.get_draft_version())
             buttons[action_name]['has_permission'] = True
-        if obj.publisher_is_draft_version:
+        if obj.publisher.is_draft_version:
             # Add a link to go back to live
             action_name = 'show_live'
             buttons[action_name] = copy(defaults[action_name])
-            if obj.publisher_has_published_version:
+            if obj.publisher.has_published_version:
                 buttons[action_name]['has_permission'] = True
-                buttons[action_name]['url'] = self.publisher_get_detail_admin_url(obj.publisher_published_version)
+                buttons[action_name]['url'] = self.publisher_get_detail_admin_url(obj.publisher.get_published_version())
             else:
                 buttons[action_name]['has_permission'] = False
                 buttons[action_name]['disabled_message'] = _('There is no published version yet.')
-        elif obj.publisher_is_draft_version and not obj.publisher_has_published_version:
+        elif obj.publisher.is_draft_version and not obj.publisher.has_published_version:
             # Add a link to go back to live
             action_name = 'show_live'
             buttons[action_name] = copy(defaults[action_name])
-            buttons[action_name]['url'] = self.publisher_get_detail_admin_url(obj.publisher_published_version)
+            buttons[action_name]['url'] = self.publisher_get_detail_admin_url(obj.publisher.get_published_version())
             buttons[action_name]['has_permission'] = True
-        if obj.publisher_is_published_version and obj.publisher_has_pending_deletion_request:
+        if obj.publisher.is_published_version and obj.publisher.has_pending_deletion_request:
             # We're going to take the shortcut and show the regular delete
             # view instead of the publish_deletion action, because that will
             # show the user the impact of the deletion.
@@ -209,14 +209,14 @@ class PublisherAdminMixinBase(object):
                 buttons['delete'] = copy(defaults['delete'])
         if has_delete_permission:
             buttons['delete'] = copy(defaults['delete'])
-        if obj.publisher_is_published_version:
+        if obj.publisher.is_published_version:
             buttons['cancel'] = copy(defaults['cancel'])
             buttons['cancel']['url'] = self.publisher_get_admin_changelist_url(obj)
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         obj = self.get_object(request, object_id)
         is_enabled = self.publisher_get_is_enabled(request, obj)
-        if is_enabled and obj and obj.publisher_is_published_version:
+        if is_enabled and obj and obj.publisher.is_published_version:
             # We don't allow editing the live version. Some apps will raise
             # validation errors if there are not fields in the POST
             # (django-parler). So if we're on the published view, everything is
@@ -245,31 +245,31 @@ class PublisherAdminMixinBase(object):
         """
         # FIXME: check permissions (edit)
         if request.POST and '_create_draft' in request.POST:
-            if obj.publisher_is_published_version and obj.publisher_has_pending_changes:
+            if obj.publisher.is_published_version and obj.publisher.has_pending_changes:
                 # There already is a draft. Just redirect to it.
                 return HttpResponseRedirect(
                     self.publisher_get_detail_admin_url(
-                        obj.publisher_draft_version
+                        obj.publisher.get_draft_version()
                     )
                 )
-            draft = obj.publisher_create_draft()
+            draft = obj.publisher.create_draft()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(draft))
         elif request.POST and '_discard_draft' in request.POST:
-            published = obj.publisher_get_published_version()
-            obj.publisher_discard_draft()
+            published = obj.publisher.get_published_version()
+            obj.publisher.discard_draft()
             return HttpResponseRedirect(self.publisher_get_detail_or_changelist_url(published))
         elif request.POST and '_publish' in request.POST:
             # FIXME: check the user_can_publish() permission
-            published = obj.publisher_publish()
+            published = obj.publisher.publish()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
         elif request.POST and '_request_deletion' in request.POST:
-            published = obj.publisher_request_deletion()
+            published = obj.publisher.request_deletion()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
         elif request.POST and '_discard_requested_deletion' in request.POST:
-            obj.publisher_discard_requested_deletion()
+            obj.publisher.discard_requested_deletion()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
         elif request.POST and '_publish_deletion' in request.POST:
-            obj.publisher_publish_deletion()
+            obj.publisher.publish_deletion()
             return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
         return None
 
