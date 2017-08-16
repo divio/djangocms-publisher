@@ -8,11 +8,9 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
-from .utils.compat import PARLER_IS_INSTALLED
 from .utils.copying import (
     DEFAULT_COPY_EXCLUDE_FIELDS,
     copy_object,
-    get_fields_to_copy,
     refresh_from_db)
 from .utils import relations
 
@@ -95,6 +93,297 @@ class PublisherQuerySet(PublisherQuerySetMixin, models.QuerySet):
     pass
 
 
+class Publisher(object):
+    """
+    Discriptor for use on objects that should get draft/published funtionality.
+
+    """
+    def __init__(self, instance):
+        self.instance = instance
+
+    @property
+    def is_published_version(self):
+        return self.instance.publisher_is_published_version
+
+    @is_published_version.setter
+    def is_published_version(self, value):
+        self.instance.publisher_is_published_version = bool(value)
+
+    @property
+    def is_draft_version(self):
+        return not self.instance.publisher_is_published_version
+
+    @is_draft_version.setter
+    def is_draft_version(self, value):
+        self.instance.publisher_is_published_version = not bool(value)
+
+    @property
+    def published_at(self):
+        return self.instance.publisher_published_at
+
+    @published_at.setter
+    def published_at(self, value):
+        self.instance.publisher_published_at = value
+
+    @property
+    def has_pending_changes(self):
+        if self.is_draft_version:
+            return True
+        try:
+            # Query! :-(
+            # Can be avoided by using
+            # .select_related('draft') in the queryset.
+            return bool(self.instance.publisher_draft_version)
+        except ObjectDoesNotExist:
+            return False
+
+    @property
+    def has_pending_deletion_request(self):
+        return self.instance.publisher_deletion_requested
+
+    @property
+    def has_published_version(self):
+        if self.is_published_version:
+            return True
+        # Query! :-(
+        return bool(self.get_published_version())
+
+    def get_draft_version(self):
+        if self.is_draft_version:
+            return self.instance
+        elif self.has_pending_changes:
+            # DB Query
+            return self.instance.publisher_draft_version
+        return None
+
+    def get_published_version(self):
+        if self.is_published_version:
+            return self.instance
+        elif self.instance.publisher_published_version_id:
+            # DB Query
+            return self.instance.publisher_published_version
+        return None
+
+    @transaction.atomic
+    def publish(self, validate=True, delete=True, update_relations=True):
+        draft = self.get_draft_version()
+        published = self.get_published_version()
+        assert draft
+        if validate:
+            draft.publisher_can_publish()
+        now = timezone.now()
+
+        # * update the live version with the data from the draft
+        if not published:
+            # There is no published version yet. Create one.
+            published = draft._meta.model()
+            published_created = True
+        else:
+            published_created = False
+        published.publisher_is_published_version = True
+        published.publisher_published_at = now
+        published.publisher.copy_object(old_obj=draft)  # saves
+        if update_relations:
+            # * find any other objects still pointing to the draft version and
+            #   switch them to the live version. (otherwise cascade or set null
+            #   would yield unexpected results)
+            relations.update_relations(
+                old_obj=draft,
+                new_obj=published,
+                exclude=relations.ignore_stuff_to_dict(
+                    draft.publisher.update_relations_exclude(old_obj=draft)
+                )
+            )
+        if delete:
+            # * Delete draft (self)
+            draft.delete()
+        elif published_created:
+            draft.publisher_published_version = published
+            draft.save()
+        # Refresh from db to get the latest version without any cached stuff.
+        # refresh_from_db() does not work in some cases because parler
+        # caches translations at _translations_cache which may remain with stale
+        # data.
+        published = self.instance._meta.model.objects.get(pk=published.pk)
+        return published
+
+    def get_or_create_draft(self):
+        draft = self.get_draft_version()
+        if draft:
+            return draft, False
+        return self.create_draft(), True
+
+    @transaction.atomic
+    def create_draft(self):
+        if self.has_pending_deletion_request:
+            self.discard_deletion_request()
+        draft = self.instance._meta.model.objects.get(pk=self.instance.pk)
+        draft.pk = draft.id = None
+        draft.publisher_is_published_version = False
+        draft.publisher_published_version = self.instance
+        draft.save()
+        draft.publisher.copy_relations(old_obj=self.instance)
+        return refresh_from_db(draft)
+
+    def discard_draft(self, update_relations=True):
+        draft = self.get_draft_version()
+        if not draft:
+            return
+        published = self.get_published_version()
+        if not published:
+            self.instance.delete()
+            return
+        if update_relations:
+            relations.update_relations(
+                old_obj=draft,
+                new_obj=published,
+                exclude=relations.ignore_stuff_to_dict(
+                    self.update_relations_exclude(old_obj=draft),
+                )
+            )
+        draft.delete()
+
+    def request_deletion(self):
+        draft = self.get_draft_version()
+        published = self.get_published_version()
+        published.publisher_deletion_requested = True
+        published.save(update_fields=['publisher_deletion_requested'])
+        if draft:
+            draft.discard_draft()
+        return published
+
+    def discard_deletion_request(self):
+        published = self.get_published_version()
+        published.publisher_deletion_requested = False
+        published.save(update_fields=['publisher_deletion_requested'])
+
+    def publish_deletion(self):
+        assert self.has_pending_deletion_request
+        self.instance.delete()
+        self.instance.id = self.instance.pk = None
+        return self.instance
+
+    def copy_object(self, old_obj, commit=True):
+        new_obj = self.instance
+        copy_object(
+            new_obj=new_obj,
+            old_obj=old_obj,
+            exclude_fields=self.copy_object_exclude_fields(),
+        )
+        if commit:
+            new_obj.save()
+            new_obj.publisher.copy_relations(old_obj=old_obj)
+
+    def copy_relations(self, old_obj):
+        self.instance.publisher_copy_relations(old_obj=old_obj)
+
+    def copy_object_exclude_fields(self):
+        return (
+            set(DEFAULT_COPY_EXCLUDE_FIELDS) |
+            set(self.instance.publisher_copy_object_exclude_fields)
+        )
+
+    def update_relations_exclude(self, old_obj):
+        return self.instance.publisher_update_relations_exclude(old_obj=old_obj)
+
+    def can_publish(self):
+        draft = self.get_draft_version()
+        if draft:
+            draft.publisher_can_publish()
+
+    def user_can_publish(self, user):
+        draft = self.get_draft_version()
+        if draft:
+            return draft.publisher_user_can_publish(user=user)
+        else:
+            return False
+
+    def available_actions(self, user):
+        actions = {}
+        if self.has_pending_deletion_request:
+            actions['discard_requested_deletion'] = {}
+            actions['publish_deletion'] = {}
+        if (
+            self.is_draft_version and
+            self.has_pending_changes
+        ):
+            actions['publish'] = {}
+        if (
+            self.is_draft_version and
+            self.has_pending_changes and
+            self.has_published_version
+        ):
+            actions['discard_draft'] = {}
+        if self.is_published_version and not self.has_pending_changes:
+            actions['create_draft'] = {}
+        if self.is_published_version and not self.has_pending_deletion_request:
+            actions['request_deletion'] = {}
+        for action_name, data in actions.items():
+            data['name'] = action_name
+            if action_name in ('publish', 'publish_deletion'):
+                # FIXME: do actual permission check
+                data['has_permission'] = user.is_superuser
+            else:
+                data['has_permission'] = True
+        return actions
+
+    def allowed_actions(self, user):
+        return [
+            action
+            for action, data in self.available_actions(user).items()
+            if data['has_permission']
+        ]
+
+    @property
+    def status_text(self):
+        if self.has_pending_deletion_request:
+            return _('Pending deletion')
+        elif self.is_draft_version:
+            if self.has_published_version:
+                return _('Unpublished changes')
+            else:
+                return _('Not published')
+        return ''
+
+    def add_status_label(self, label):
+        """
+        Extra label to be added to the default string representation of objects
+        to identify their status.
+        """
+        status = self.status_text
+        if status:
+            return '{} [{}]'.format(label, status.upper())
+        return '{}'.format(label)
+
+    @property
+    def state(self):
+        choices = dict(PUBLISHER_STATE_CHOICES)
+        state_dict = {
+            'is_published': self.has_published_version,
+            'has_pending_changes': self.has_pending_changes,
+            'has_pending_deletion_request': self.has_pending_deletion_request,
+        }
+        if self.has_pending_deletion_request:
+            state_id = 'pending_deletion'
+            css_class = 'pending_deletion'
+        elif self.has_published_version and self.has_pending_changes:
+            state_id = 'pending_changes'
+            css_class = 'dirty'
+        elif self.has_published_version and not self.has_pending_changes:
+            state_id = 'published'
+            css_class = 'published'
+        elif not self.has_published_version and self.has_pending_changes:
+            state_id = 'not_published'
+            css_class = 'unpublished'
+        else:
+            state_id = 'empty'
+            css_class = 'empty'
+        state_dict['identifier'] = state_id
+        state_dict['css_class'] = css_class
+        state_dict['text'] = choices[state_id]
+        return state_dict
+
+
 class PublisherModelMixin(models.Model):
     publisher_is_published_version = models.BooleanField(
         default=False,
@@ -127,15 +416,13 @@ class PublisherModelMixin(models.Model):
     class Meta:
         abstract = True
 
-    publisher_copy_exclude_fields = ()
+    @cached_property
+    def publisher(self):
+        return Publisher(instance=self)
 
-    def publisher_get_copy_exclude_fields(self):
-        return (
-            set(DEFAULT_COPY_EXCLUDE_FIELDS) |
-            set(self.publisher_copy_exclude_fields)
-        )
+    # USER OVERRIDABLE
+    publisher_copy_object_exclude_fields = ()
 
-    # USER OVERRIDABLE METHODS
     def publisher_copy_relations(self, old_obj):
         # At this point the basic fields on the model have all already been
         # copied. Only relations need to be copied now.
@@ -150,298 +437,20 @@ class PublisherModelMixin(models.Model):
         # them. But it may not always be possible or straight forward.
         pass
 
-    def publisher_copy_object(self, old_obj, commit=True):
-        # TODO: use the id swapping trick (but remember to set
-        #       publisher_published_version_id too!)
-        copy_object(
-            new_obj=self,
-            old_obj=old_obj,
-            exclude_fields=self.publisher_get_copy_exclude_fields(),
+    def publisher_update_relations_exclude(self, old_obj):
+        return (
+            # (<source model>, 'field_name'),
+            # (Article.categories.through, 'to_article'),
+            # (SomeModel, 'fk_field_to_me'),
         )
-        if commit:
-            self.save()
-            self.publisher_copy_relations(old_obj=old_obj)
-
-    def publisher_rewrite_ignore_stuff(self, old_obj):
-        return {}
 
     def publisher_can_publish(self):
-        assert self.publisher_is_draft_version
-        # FOR SUBCLASSES
         # Checks whether the data and all linked data is ready to publish.
         # Raise ValidationError if not.
+        pass
 
     def publisher_user_can_publish(self, user):
-        # FOR SUBCLASSES
-        # Checks whether the user has permissions to publish
+        # Checks whether the user has permissions to publish.
+        # Return True or False.
         return True
-    # /USER OVERRIDABLE METHODS
-
-    @property
-    def publisher_is_draft_version(self):
-        return not self.publisher_is_published_version
-
-    @property
-    def publisher_has_published_version(self):
-        if self.publisher_is_published_version:
-            return True
-        else:
-            return bool(self.publisher_published_version_id)
-
-    @cached_property
-    def publisher_has_pending_changes(self):
-        if self.publisher_is_draft_version:
-            return True
-        else:
-            try:
-                # Query! Can probably be avoided by using
-                # .select_related('draft') in the queryset.
-                return bool(self.publisher_draft_version)
-            except ObjectDoesNotExist:
-                return False
-
-    @property
-    def publisher_has_pending_deletion_request(self):
-        return self.publisher_is_published_version and self.publisher_deletion_requested
-
-    @transaction.atomic
-    def publisher_create_draft(self):
-        assert self.publisher_is_published_version
-        if self.publisher_has_pending_deletion_request:
-            self.publisher_discard_requested_deletion()
-        # TODO: Get draft without a query by copying in memory)
-        #       Simply setting pk and id was causing weird problems (probably
-        #       related to django-parler).
-        draft = self._meta.model.objects.get(id=self.id)
-        draft.pk = None
-        draft.id = None
-        draft.publisher_is_published_version = False
-        draft.publisher_published_version = self
-        # If save() was called even though a draft already exists,
-        # we'll get the db error here.
-        draft.save()
-        draft.publisher_copy_relations(old_obj=self)
-        return draft
-
-    def publisher_get_or_create_draft(self):
-        if self.publisher_is_draft_version:
-            return self, False
-
-        if (
-            self.publisher_is_published_version and
-            self.publisher_has_pending_changes
-        ):
-            return self.publisher_draft_version, False
-
-        if (
-            self.publisher_is_published_version and
-            not self.publisher_has_pending_changes
-        ):
-            return self.publisher_create_draft(), True
-
-    @transaction.atomic
-    def publisher_discard_draft(self):
-        assert self.publisher_is_draft_version
-        old_obj = self
-        new_obj = self.publisher_published_version
-        relations.update_relations(
-            old_obj=old_obj,
-            new_obj=new_obj,
-            exclude=relations.ignore_stuff_to_dict(self.publisher_rewrite_ignore_stuff(old_obj=old_obj))
-        )
-        self.delete()
-
-    @transaction.atomic
-    def publisher_publish(self, validate=True, delete=None, update_relations=None):
-        assert self.publisher_is_draft_version
-        is_parler_model = self.publisher_is_parler_master_model
-        if delete is None:
-            # Don't delete the master with parler, the translation takes care of
-            # that if necessary.
-            delete = not is_parler_model
-        if update_relations is None:
-            # Don't update relations of the master with parler, the translation
-            # takes care of that if necessary.
-            update_relations = not is_parler_model
-
-        draft = self
-        if validate:
-            draft.publisher_can_publish()
-        now = timezone.now()
-        published = draft.publisher_published_version
-
-        # * update the live version with the data from the draft
-        if not published:
-            # There is no published version yet. Create one.
-            published = draft._meta.model()
-        published.publisher_is_published_version = True
-        published.publisher_published_at = now
-        published.publisher_copy_object(old_obj=draft)  # saves
-        if update_relations:
-            # * find any other objects still pointing to the draft version and
-            #   switch them to the live version. (otherwise cascade or set null
-            #   would yield unexpected results)
-            relations.update_relations(
-                old_obj=draft,
-                new_obj=published,
-                exclude=relations.ignore_stuff_to_dict(
-                    draft.publisher_rewrite_ignore_stuff(old_obj=draft)
-                )
-            )
-        if delete:
-            # * Delete draft (self)
-            draft.delete()
-        # Refresh from db to get the latest version without any cached stuff.
-        # refresh_from_db() does not work in some cases because parler
-        # caches translations at _translations_cache which may remain with stale
-        # data.
-        published = self._meta.model.objects.get(pk=published.pk)
-        return published
-
-    @transaction.atomic
-    def publisher_request_deletion(self):
-        assert (
-            self.publisher_is_draft_version and self.publisher_has_published_version or
-            self.publisher_is_published_version
-        )
-        # shortcut to be able to request_deletion on a draft. Preferrably this
-        # should be done on the live object.
-        if self.publisher_is_draft_version:
-            return self.publisher_published_version.request_deletion()
-
-        # It is a published object
-        published = self
-        if self.publisher_has_pending_changes:
-            draft = published.publisher_draft_version
-        else:
-            draft = None
-
-        published.publisher_deletion_requested = True
-        published.save(update_fields=['publisher_deletion_requested'])
-        if draft:
-            draft.delete()
-        return published
-
-    @transaction.atomic
-    def publisher_discard_requested_deletion(self):
-        assert self.publisher_is_published_version
-        self.publisher_deletion_requested = False
-        self.save(update_fields=['publisher_deletion_requested'])
-
-    @transaction.atomic
-    def publisher_publish_deletion(self):
-        assert self.publisher_has_pending_deletion_request
-        self.delete()
-        self.id = None
-        return self
-
-    def publisher_get_published_version(self):
-        if self.publisher_is_published_version:
-            return self
-        if self.publisher_published_version_id:
-            return self.publisher_published_version
-        return None
-
-    def publisher_get_draft_version(self):
-        if self.publisher_is_draft_version:
-            return self
-        if self.publisher_has_pending_changes:
-            return self.publisher_draft_version
-        return None
-
-    def publisher_available_actions(self, user):
-        actions = {}
-        if self.publisher_deletion_requested:
-            actions['discard_requested_deletion'] = {}
-            actions['publish_deletion'] = {}
-        if self.publisher_is_draft_version and self.publisher_has_pending_changes:
-            actions['publish'] = {}
-        if (
-            self.publisher_is_draft_version and
-            self.publisher_has_pending_changes and
-            self.publisher_has_published_version
-        ):
-            actions['discard_draft'] = {}
-        if self.publisher_is_published_version and not self.publisher_has_pending_changes:
-            actions['create_draft'] = {}
-        if self.publisher_is_published_version and not self.publisher_deletion_requested:
-            actions['request_deletion'] = {}
-        for action_name, data in actions.items():
-            data['name'] = action_name
-            if action_name in ('publish', 'publish_deletion'):
-                # FIXME: do actual permission check
-                data['has_permission'] = user.is_superuser
-            else:
-                data['has_permission'] = True
-        return actions
-
-    def publisher_allowed_actions(self, user):
-        return [
-            action
-            for action, data in self.publisher_available_actions(user).items()
-            if data['has_permission']
-        ]
-
-    @property
-    def publisher_status_text(self):
-        if self.publisher_has_pending_deletion_request:
-            return _('Pending deletion')
-        elif self.publisher_is_draft_version:
-            if self.publisher_has_published_version:
-                return _('Unpublished changes')
-            else:
-                return _('Not published')
-        return ''
-
-    def publisher_add_status_label(self, label):
-        """
-        Extra label to be added to the default string representation of objects
-        to identify their status.
-        """
-        status = self.publisher_status_text
-        if status:
-            return '{} [{}]'.format(label, status.upper())
-        else:
-            return '{}'.format(label)
-
-    @cached_property
-    def publisher_is_parler_master_model(self):
-        if not PARLER_IS_INSTALLED:
-            return False
-        from parler.models import TranslatableModel
-        return isinstance(self, TranslatableModel)
-
-    @property
-    def publisher_state(self):
-        choices = dict(PUBLISHER_STATE_CHOICES)
-        published = self.publisher_get_published_version()
-        draft = self.publisher_get_draft_version()
-        is_published = bool(published)
-        has_pending_changes = bool(draft)
-        has_pending_deletion_request = (
-            published and published.publisher_has_pending_deletion_request
-        )
-        state_dict = {
-            'is_published': is_published,
-            'has_pending_changes': has_pending_changes,
-            'has_pending_deletion_request': has_pending_deletion_request,
-        }
-        if has_pending_deletion_request:
-            state_id = 'pending_deletion'
-            css_class = 'pending_deletion'
-        elif is_published and has_pending_changes:
-            state_id = 'pending_changes'
-            css_class = 'dirty'
-        elif is_published and not has_pending_changes:
-            state_id = 'published'
-            css_class = 'published'
-        elif not is_published and has_pending_changes:
-            state_id = 'not_published'
-            css_class = 'unpublished'
-        else:
-            state_id = 'empty'
-            css_class = 'empty'
-        state_dict['identifier'] = state_id
-        state_dict['css_class'] = css_class
-        state_dict['text'] = choices[state_id]
-        return state_dict
+    # /USER OVERRIDABLE

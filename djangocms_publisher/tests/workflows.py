@@ -1,11 +1,13 @@
 #-*- coding: utf-8 -*-
 from __future__ import absolute_import
 
-from django.core.exceptions import ObjectDoesNotExist
 from django.test.testcases import TestCase
 
-from djangocms_publisher.test_project.test_app.models import Thing
-from djangocms_publisher.test_project.test_app_parler.models import ParlerThing
+from djangocms_publisher.test_project.test_app.models import (
+    Thing,
+    ThingAttachment,
+    ExternalThing,
+)
 from djangocms_publisher.utils.copying import refresh_from_db
 
 
@@ -14,148 +16,117 @@ class PublishTestCase(TestCase):
         pass
 
     def tearDown(self):
-        pass
+        Thing.objects.all().delete()
+        Thing.objects.all().delete()
 
-    def test_publish_thing(self):
-        draft = Thing.objects.create(name='Test1')
-        self.assertEqual(draft.publisher_is_draft_version, True)
-        published = draft.publisher_publish()
-        self.assertEqual(published.publisher_is_published_version, True)
+    def _create_draft(self, name, attachment_names=()):
+        # Create first draft
+        draft = Thing.objects.create(name=name)
+        self.assertTrue(draft.publisher.is_draft_version)
+        for name in attachment_names:
+            draft.attachments.create(name=name)
+        return draft
 
+    def test_publisher_properties(self):
+        draft = self._create_draft(name='Thing1')
+        self.assertEqual(draft.publisher.is_published_version, draft.publisher_is_published_version)
+        self.assertEqual(draft.publisher.is_draft_version, not draft.publisher_is_published_version)
+
+        draft.publisher.is_published_version = True
+        self.assertEqual(draft.publisher_is_published_version, True)
+
+        draft.publisher.is_published_version = False
+        self.assertEqual(draft.publisher_is_published_version, False)
+
+        draft.publisher.is_draft_version = False
+        self.assertEqual(draft.publisher_is_published_version, True)
+
+        draft.publisher.is_draft_version = True
+        self.assertEqual(draft.publisher_is_published_version, False)
+
+    def test_full_workflow(self):
+        attachment_names = ('att1', 'att2', 'att3')
+        draft = self._create_draft(
+            name='Test1',
+            attachment_names=attachment_names,
+        )
+
+        self.assertEqual(Thing.objects.count(), 1)
+        self.assertEqual(Thing.objects.publisher_drafts().count(), 1)
+        self.assertEqual(Thing.objects.publisher_published().count(), 0)
+
+        # Publish
+        published = draft.publisher.publish()
+        self.assertEqual(Thing.objects.count(), 1)
+        self.assertEqual(Thing.objects.publisher_drafts().count(), 0)
+        self.assertEqual(Thing.objects.publisher_published().count(), 1)
+        self.assertTrue(published.publisher.is_published_version)
         self.assertEqual(draft.name, published.name)
-        # FIXME: Test actual fields and relationship updating
-
-
-class ParlerTranslationPublishTestCase(TestCase):
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
-
-    def test_publish_from_draft(self):
-        draft = ParlerThing()
-        draft.save()
-        self.assertTrue(draft.publisher_is_draft_version)
-        draft.translations.create(
-            language_code='en',
-            name='EN Translation',
-        )
-        draft.translations.create(
-            language_code='de',
-            name='DE Translation',
-        )
-        draft_de = draft.translations.get(language_code='de')
-        self.assertTrue(draft_de.translation_publisher.is_draft_version)
-
-        # Publish the de translation
-        published_de = draft_de.translation_publisher.publish()
-
-        self.assertTrue(published_de.translation_publisher.is_published_version)
-
-        # Check that the name was correctly copied over
-        self.assertEqual(draft_de.name, published_de.name)
-
-        # Check that the master draft still exists
-        # (there still is an untranslated 'en' version, so it needs to stay
-        # around).
-        self.assertTrue(ParlerThing.objects.filter(id=draft.pk).exists())
-
-        draft = refresh_from_db(draft)
-        self.assertTrue(draft.publisher_is_draft_version)
-
-        # Publish en translation
-        draft_en = draft.translations.get(language_code='en')
-        published_en = draft_en.translation_publisher.publish()
-
-        self.assertTrue(published_en.translation_publisher.is_published_version)
-
-        # Check that the name was correctly copied over
-        self.assertEqual(draft_en.name, published_en.name)
-
-        # Check that the master draft has been deleted
-        # (no more draft translations exist)
-        self.assertFalse(ParlerThing.objects.filter(id=draft.pk).exists())
-        self.assertFalse(published_en.master.publisher_has_pending_changes)
-
-        # FIXME: Test actual fields and relationship updating
-
-    def test_create_draft(self):
-        published = ParlerThing(publisher_is_published_version=True)
-        published.save()
-        self.assertTrue(published.publisher_is_published_version)
-        published.translations.create(
-            language_code='en',
-            name='EN Translation',
-        )
-        published.translations.create(
-            language_code='de',
-            name='DE Translation',
-        )
-        published_de = published.translations.get(language_code='de')
-        self.assertTrue(published.publisher_is_published_version)
-        self.assertTrue(published_de.translation_publisher.is_published_version)
-
-        # Create draft translation
-        draft_de = published_de.translation_publisher.create_draft()
-
-        draft_de = refresh_from_db(draft_de)
-        published_de = refresh_from_db(published_de)
-        self.assertTrue(draft_de.translation_publisher.is_draft_version)
-        self.assertTrue(draft_de.master.publisher_is_draft_version)
         self.assertEqual(
-            draft_de.master.publisher_published_version_id,
-            published_de.master.id
+            set(published.attachments.values_list('name', flat=True)),
+            set(attachment_names),
         )
-        # Check that the name was correctly copied over
-        self.assertEqual(draft_de.name, published_de.name)
+        self.assertFalse(Thing.objects.filter(publisher_published_version=published).exists())
 
-    def test_request_translation_deletion(self):
-        published = ParlerThing(publisher_is_published_version=True)
-        published.save()
-        published.translations.create(
-            language_code='en',
-            name='EN Translation',
-        )
-        published.translations.create(
-            language_code='de',
-            name='DE Translation',
-        )
-        published_de = published.translations.get(language_code='de')
+        # Create draft again
+        published = refresh_from_db(published)
+        draft = published.publisher.create_draft()
+        self.assertEqual(Thing.objects.count(), 2)
+        self.assertEqual(Thing.objects.publisher_drafts().count(), 1)
+        self.assertEqual(Thing.objects.publisher_published().count(), 1)
+        self.assertEqual(Thing.objects.publisher_draft_or_published_only().count(), 1)
+        draft = refresh_from_db(draft)
+        self.assertEqual(draft.publisher_published_version, published)
+        self.assertTrue(draft.publisher.is_draft_version)
+        self.assertEqual(draft.name, published.name)
 
-        self.assertFalse(published_de.translation_publisher.has_pending_deletion_request)
-        # Request deletion
-        published_de = published_de.translation_publisher.request_deletion()
-        self.assertTrue(published_de.translation_publisher.has_pending_deletion_request)
+        # Edit the draft
+        new_draft_name = 'Test2 altered'
+        draft = refresh_from_db(draft)
+        draft.name = new_draft_name
+        draft.save()
 
-    def test_request_translation_deletion_with_existing_draft(self):
-        published = ParlerThing(publisher_is_published_version=True)
-        published.save()
-        published.translations.create(
-            language_code='en',
-            name='EN Translation',
-        )
-        published.translations.create(
-            language_code='de',
-            name='DE Translation',
-        )
-        published_de = published.translations.get(language_code='de')
-        draft_de = published_de.translation_publisher.create_draft()
-        # FIXME: We have to refresh from db here to get valid data. Should we
-        #        do this in the code to, or just here in the tests?
-        published_de = refresh_from_db(published_de)
-        # FIXME: why the hell does this only work if I refresh the draft from db?
-        draft_de = refresh_from_db(draft_de)
-        self.assertTrue(draft_de.translation_publisher.has_pending_changes)
-        self.assertTrue(published_de.translation_publisher.has_pending_changes)
-        self.assertFalse(published_de.translation_publisher.has_pending_deletion_request)
+        # Publish draft again
+        published = draft.publisher.publish()
+        published = refresh_from_db(published)
+        self.assertEqual(Thing.objects.count(), 1)
+        self.assertEqual(new_draft_name, published.name)
 
-        # Request deletion
-        published_de = draft_de.translation_publisher.request_deletion()
+    def test_discard(self):
+        draft = self._create_draft(name='Test discard', attachment_names=('one', 'two',))
+        draft_id = draft.id
+        draft.publisher.discard_draft()
+        self.assertFalse(Thing.objects.filter(id=draft_id).exists())
 
-        self.assertRaises(ObjectDoesNotExist, lambda: refresh_from_db(draft_de))
-        self.assertTrue(published_de.translation_publisher.has_pending_deletion_request)
+    def test_discard_with_published(self):
+        draft = self._create_draft(name='Test discard', attachment_names=('one', 'two',))
+        published = draft.publisher.publish()
+        draft = published.publisher.create_draft()
+        draft_id = draft.id
+        published_id = published.id
+        draft.publisher.discard_draft()
+        self.assertFalse(Thing.objects.filter(id=draft_id).exists())
+        self.assertTrue(Thing.objects.filter(id=published_id).exists())
 
-        published_de = refresh_from_db(published_de)
-        draft_de_exists = bool(published_de.translation_publisher.get_draft_version())
-        self.assertFalse(draft_de_exists)
+    def test_update_relations(self):
+        thing_draft = self._create_draft('a Thing', attachment_names=('att1', 'att2'))
+        thing_published = thing_draft.publisher.publish(delete=False, update_relations=False)
+        thing_published_id1 = thing_published.id
+
+        external_thing = ExternalThing.objects.create(name='ext thing', thing=thing_draft)
+        external_thing.things = [thing_draft]
+        external_thing = refresh_from_db(external_thing)
+        self.assertEqual(external_thing.things.count(), 1)
+
+        self.assertEqual(external_thing.thing, thing_draft)
+        self.assertEqual(external_thing.things.first(), thing_draft)
+
+        thing_draft = refresh_from_db(thing_draft)
+        thing_published = thing_draft.publisher.publish()
+        thing_published_id2 = thing_published.id
+        self.assertEqual(thing_published_id1, thing_published_id2)
+        external_thing = refresh_from_db(external_thing)
+        self.assertEqual(external_thing.thing, thing_published)
+        self.assertEqual(external_thing.things.first(), thing_published)
+
+

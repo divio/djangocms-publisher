@@ -8,6 +8,24 @@ from django.utils.encoding import python_2_unicode_compatible
 from djangocms_publisher.models import PublisherModelMixin, PublisherQuerySetMixin
 
 
+def _repr(obj, extra=None):
+    if extra:
+        extra_str = ' '.join([
+            '{}:{}'.format(key, value)
+            for key, value in sorted(extra.items())
+        ])
+        extra_str = ' ' + extra_str
+    else:
+        extra_str = ''
+    return '<{}.{} id:{}{} {}>'.format(
+        obj.__module__,
+        obj.__class__.__name__,
+        obj.id,
+        extra_str,
+        id(obj),
+    )
+
+
 class ThingQuerySet(PublisherQuerySetMixin, models.QuerySet):
     def search(self, term):
         return self.filter(
@@ -30,6 +48,9 @@ class Thing(PublisherModelMixin, models.Model):
 
     def __str__(self):
         return self.publisher_add_status_label(self.name)
+
+    def __repr__(self):
+        return _repr(self, extra={'type': 'published' if self.publisher_is_published_version else 'draft'})
 
     def can_publish(self):
         assert self.is_draft
@@ -55,7 +76,24 @@ class Thing(PublisherModelMixin, models.Model):
             attachment.thing = self
             attachment.save()
 
+    def publisher_update_relations_exclude(self, old_obj):
+        return (
+            (ThingAttachment, 'thing'),
+        )
+
 
 class ThingAttachment(models.Model):
     thing = models.ForeignKey(Thing, related_name='attachments')
     name = models.CharField(max_length=255)
+
+    def __repr__(self):
+        return _repr(self)
+
+
+class ExternalThing(models.Model):
+    thing = models.ForeignKey(Thing, related_name='+')
+    things = models.ManyToManyField(Thing, related_name='+', blank=True)
+    name = models.CharField(max_length=255)
+
+    def __repr__(self):
+        return _repr(self)
