@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
 
+from collections import OrderedDict
+
+from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -21,13 +24,13 @@ class ParlerPublisher(Publisher):
     """
     def get_draft_version(self):
         obj = super(ParlerPublisher, self).get_draft_version()
-        if not obj.language_code:
+        if obj and not obj.language_code:
             obj.set_current_language(self.instance.language_code)
         return obj
 
     def get_published_version(self):
         obj = super(ParlerPublisher, self).get_published_version()
-        if not obj.language_code:
+        if obj and not obj.language_code:
             obj.set_current_language(self.instance.language_code)
         return obj
 
@@ -137,3 +140,62 @@ class ParlerPublisher(Publisher):
         self.instance.save(
             update_fields=['publisher_translation_deletion_requested']
         )
+
+    def all_translations(self, prefer_drafts=None):
+        return self.all_translations_dict(prefer_drafts=prefer_drafts).values()
+
+    def all_translations_dict(self, prefer_drafts=None):
+        # FIXME: reduce queries
+        draft = self.instance.master_publisher.get_draft_version()
+        published = self.instance.master_publisher.get_published_version()
+        master_pks = set()
+        if draft:
+            master_pks.add(draft.pk)
+        if published:
+            master_pks.add(published.pk)
+        qs = self.instance._parler_meta.root_model.objects.filter(master_id__in=master_pks)
+        translations = {}
+        for translation in qs:
+            lang = translations.setdefault(translation.language_code, {})
+            if translation.publisher.is_draft_version:
+                lang['draft'] = translation
+            else:
+                lang['published'] = translation
+        result = {}
+        if prefer_drafts is True:
+            for lang, versions in translations.items():
+                if 'draft' in versions:
+                    result[lang] = versions['draft']
+                else:
+                    result[lang] = versions['published']
+        if prefer_drafts is False:
+            for lang, versions in translations.items():
+                if 'published' in versions:
+                    result[lang] = versions['published']
+                else:
+                    result[lang] = versions['draft']
+        return result
+
+    def translation_states(self, all_translations=None):
+        site_id = getattr(settings, 'SITE_ID', None)
+        all_language_codes = [
+            lang_dict['code']
+            for lang_dict in settings.PARLER_LANGUAGES.get(site_id, ())
+        ]
+        if all_translations is None:
+            all_translations = {
+                trans.language_code: trans
+                for trans in self.all_translations(prefer_drafts=False)
+            }
+        all_states = OrderedDict()
+        for language_code in all_language_codes:
+            if language_code in all_translations:
+                all_states[language_code] = all_translations[language_code].publisher.state
+            else:
+                all_states[language_code] = {
+                    'identifier': 'empty',
+                    'css_class': 'empty',
+                    'text': _('Does not exist'),
+                    'language_code': language_code,
+                }
+        return all_states.values()

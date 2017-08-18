@@ -11,9 +11,10 @@ from . import models
 class ParlerThingAdmin(PublisherParlerAdminMixin, TranslatableAdmin):
     list_display = (
         'name',
+        'publisher_status',
+        'publisher_translation_states',
         'a_boolean',
         'publisher_is_published_version',
-        'publisher_status',
     )
     search_fields = (
         'translations__name',
@@ -21,6 +22,8 @@ class ParlerThingAdmin(PublisherParlerAdminMixin, TranslatableAdmin):
     )
     readonly_fields = (
         'publisher_status',
+        'publisher_translation_states',
+        'publisher_state_debug',
     )
     fieldsets = [
         (None, {
@@ -29,6 +32,11 @@ class ParlerThingAdmin(PublisherParlerAdminMixin, TranslatableAdmin):
                 'name',
                 'a_boolean',
             ),
+        }),
+        ('Debug', {
+            'fields': (
+                'publisher_state_debug',
+            )
         })
     ]
 

@@ -19,13 +19,34 @@ class PublishTestCase(TestCase):
         Thing.objects.all().delete()
         Thing.objects.all().delete()
 
-    def _create_draft(self, name, attachment_names=()):
+    def _create_draft(self, name=None, attachment_names=(), published_version=None):
         # Create first draft
-        draft = Thing.objects.create(name=name)
+        name = name or 'Draft Thing'
+        draft = Thing.objects.create(
+            name=name,
+            publisher_published_version=published_version,
+        )
         self.assertTrue(draft.publisher.is_draft_version)
         for name in attachment_names:
             draft.attachments.create(name=name)
         return draft
+
+    def _create_published(self, name=None, attachment_names=()):
+        # Create first draft
+        name = name or 'Published Thing'
+        published = Thing.objects.create(
+            name=name,
+            publisher_is_published_version=True,
+        )
+        self.assertTrue(published.publisher.is_published_version)
+        for name in attachment_names:
+            published.attachments.create(name=name)
+        return published
+
+    def _create_published_with_draft(self, **kwargs):
+        published = self._create_published(**kwargs)
+        draft = self._create_draft(published_version=published, **kwargs)
+        return published, draft
 
     def test_publisher_properties(self):
         draft = self._create_draft(name='Thing1')
@@ -116,5 +137,26 @@ class PublishTestCase(TestCase):
         external_thing = refresh_from_db(external_thing)
         self.assertEqual(external_thing.thing, thing_published)
         self.assertEqual(external_thing.things.first(), thing_published)
+
+    def test_request_deletion(self):
+        published, draft = self._create_published_with_draft(name='Thing')
+        draft_id = draft.id
+        draft.publisher.request_deletion()
+        published = refresh_from_db(published)
+        self.assertTrue(published.publisher.has_pending_deletion_request)
+        # The draft should have been deleted
+        self.assertFalse(Thing.objects.filter(id=draft_id).exists())
+
+    def test_discard_deletion_request(self):
+        published = self._create_published()
+        published.publisher.request_deletion()
+        self.assertTrue(published.publisher.has_pending_deletion_request)
+        published = refresh_from_db(published)
+        self.assertTrue(published.publisher.has_pending_deletion_request)
+
+        published.publisher.discard_deletion_request()
+        self.assertFalse(published.publisher.has_pending_deletion_request)
+        published = refresh_from_db(published)
+        self.assertFalse(published.publisher.has_pending_deletion_request)
 
 

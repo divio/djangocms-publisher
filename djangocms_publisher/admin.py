@@ -114,6 +114,7 @@ class PublisherAdminMixinBase(object):
                 has_change_permission=has_change_permission,
                 has_delete_permission=has_delete_permission,
             )
+            print "DEFAULT BUTTONS!"
             return buttons
 
         if obj and obj.pk and obj.publisher.is_draft_version and has_change_permission:
@@ -266,7 +267,7 @@ class PublisherAdminMixinBase(object):
             published = obj.publisher.request_deletion()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
         elif request.POST and '_discard_requested_deletion' in request.POST:
-            obj.publisher.discard_requested_deletion()
+            obj.publisher.discard_deletion_request()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
         elif request.POST and '_publish_deletion' in request.POST:
             obj.publisher.publish_deletion()
@@ -275,13 +276,13 @@ class PublisherAdminMixinBase(object):
 
     def publisher_get_status_field_context(self, obj):
         return {
-            'original': obj,
+            'state': obj.publisher.state,
         }
 
     def publisher_status(self, obj):
         context = self.publisher_get_status_field_context(obj)
         return render_to_string(
-            'admin/djangocms_publisher/tools/status_label.html',
+            'admin/djangocms_publisher/tools/status_indicator.html',
             context,
         )
     publisher_status.allow_tags = True

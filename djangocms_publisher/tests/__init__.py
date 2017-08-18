@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
 from .workflows import *
-from .workflows_parler import *
 from .admin import *
+from .parler_workflows import *
+from .parler_admin import *

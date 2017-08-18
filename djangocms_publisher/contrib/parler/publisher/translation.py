@@ -159,7 +159,7 @@ class ParlerTranslationPublisher(Publisher):
         draft = self.get_draft_version()
         is_published = bool(published)
         has_pending_changes = bool(draft)
-        has_pending_deletion_request = published and published.translation_publisher.has_pending_deletion_request
+        has_pending_deletion_request = published and published.publisher.has_pending_deletion_request
         if published:
             language_code = published.language_code
         else:

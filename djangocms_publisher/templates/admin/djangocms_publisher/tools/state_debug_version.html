@@ -1,9 +1,0 @@
-{% if version %}
-<pre{% if obj == version %} style="background-color: darkgray;"{% endif %}>id:{{ version.id }} type:{% if version.publisher_is_draft_version %}draft{% else %}published{% endif %}
-{% for translation in version.translations.all %}    {% spaceless %}
-    {% if translation.language_code == version.language_code and obj == version %}<strong>{% endif %}id:{{ translation.id }} lang:{{ translation.language_code }} slug:"<em>{{ translation.slug }}</em>" title:"<em>{{ translation.title }}</em>"{% if translation.language_code == version.language_code and obj == version %}</strong>{% endif %}
-{% endspaceless %}
-{% endfor %}</pre>
-{% else %}
-<pre>None</pre>
-{% endif %}

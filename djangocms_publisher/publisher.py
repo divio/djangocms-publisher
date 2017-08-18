@@ -199,7 +199,7 @@ class Publisher(object):
         published.publisher_deletion_requested = True
         published.save(update_fields=['publisher_deletion_requested'])
         if draft:
-            draft.discard_draft()
+            self.get_publisher(draft).discard_draft()
         return published
 
     def discard_deletion_request(self):

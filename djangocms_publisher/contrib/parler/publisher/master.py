@@ -11,5 +11,3 @@ class ParlerMasterPublisher(Publisher):
     publisher.
     """
     pass
-    # def copy_object(self, old_obj, commit=True):
-    #     raise NotImplemented('must only copy master fields!')

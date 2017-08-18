@@ -12,70 +12,35 @@ from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 from django.utils.encoding import force_text
 from ...admin import PublisherAdminMixinBase, get_all_button_defaults
+from .utils import get_language_tabs
 
 
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
     delete_confirmation_template = 'admin/djangocms_publisher/contrib/parler/translation_delete_request_confirmation.html'
 
+    @property
+    def change_form_template(self):
+        """
+        Dynamic property to support transition to regular models.
+
+        This automatically picks ``admin/parler/change_form.html`` when the admin uses a translatable model.
+        """
+        if self._has_translatable_model():
+            # While this breaks the admin template name detection,
+            # the get_change_form_base_template() makes sure it inherits from your template.
+            return 'admin/djangocms_publisher/contrib/parler/parler_publisher_change_form.html'
+        else:
+            return None # get default admin selection
+
     def get_language_tabs(self, request, obj, available_languages, css_class=None):
-        """
-        Determine the language tabs to show.
-        """
-        tabs = super(PublisherParlerAdminMixin, self).get_language_tabs(
+        current_language = self.get_form_language(request, obj)
+        return get_language_tabs(
             request,
             obj=obj,
+            current_language=current_language,
             available_languages=available_languages,
             css_class=css_class,
         )
-        if not obj or obj and not obj.pk:
-            # Is this ok to do? (The "add" view)
-            return tabs
-
-        languages = [tab[2] for tab in tabs]
-
-        if obj.publisher.is_published_version:
-            # draft_translations = obj.publisher.has_pending_changes
-            published_translations = obj.translations.filter(language_code__in=languages)
-
-            if obj.publisher.has_pending_changes:
-                draft_translations = obj.publisher.get_draft_version().translations.filter(language_code__in=languages)
-            else:
-                draft_translations = published_translations.none()
-        else:
-            draft_translations = obj.translations.filter(language_code__in=languages)
-
-            if obj.publisher.has_published_version:
-                published_translations = obj.publisher.get_published_version().translations.filter(language_code__in=languages)
-            else:
-                published_translations = draft_translations.none()
-
-        draft_translations_by_language = {trans.language_code: trans for trans in draft_translations}
-        published_translations_by_language = {trans.language_code: trans for trans in published_translations}
-
-        for pos, tab in enumerate(tabs):
-            language = tab[2]
-            draft_translation = draft_translations_by_language.get(language)
-            published_translation = published_translations_by_language.get(language)
-
-            if published_translation and obj.publisher.is_draft_version:
-                # change link to point to published version of language
-                url_name = 'admin:%s_%s_%s' % (self.opts.app_label, self.opts.model_name, 'change')
-                tabs[pos] = list(tabs[pos])
-                tabs[pos][0] = reverse(url_name, args=[published_translation.master_id]) + tabs[pos][0]
-            elif not published_translation and obj.publisher.is_published_version:
-                # User is on published version of master object
-                # but there's no published version for tab language
-                if draft_translation:
-                    # Link directly to the draft version
-                    url_name = 'admin:%s_%s_%s' % (self.opts.app_label, self.opts.model_name, 'change')
-                    tabs[pos] = list(tabs[pos])
-                    tabs[pos][0] = reverse(url_name, args=[draft_translation.master_id]) + tabs[pos][0]
-                else:
-                    # Link to custom endpoint that creates draft version
-                    # of master and/or draft version of language
-                    tabs[pos] = list(tabs[pos])
-                    tabs[pos][0] = tabs[pos][0] + '&CUSTOM_ENDPOINT_TO_CREATE_A_DRAFT_VERSION=True'
-        return tabs
 
     def publisher_get_buttons(self, request, obj):
         # HACK to keep the current language when navigating between draft and
@@ -89,35 +54,6 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             language_code = getattr(obj, 'language_code', None)
         if not language_code:
             return buttons
-        translation = obj.translations.get(language_code=language_code)
-        defaults = get_all_button_defaults()
-        if (
-            translation.publisher.is_published_version and
-            translation.publisher.has_pending_changes
-        ):
-            # In this case we need to put the correct action here for linking
-            # to the draft instead of creating it.
-            buttons.pop('create_draft', None)
-            action_name = 'edit_draft'
-            buttons[action_name] = copy(defaults[action_name])
-            buttons[action_name]['url'] = self.publisher_get_detail_admin_url(
-                obj.publisher_draft_version,
-                language_code=language_code,
-            )
-            buttons[action_name]['has_permission'] = True
-        elif (
-            translation.publisher.is_published_version and
-            not translation.publisher.has_pending_changes
-        ):
-            # In this case we need to put the correct action here for linking
-            # to the draft instead of creating it.
-            buttons.pop('edit_draft', None)
-            action_name = 'create_draft'
-            buttons[action_name] = copy(defaults[action_name])
-            buttons[action_name].update(
-                translation.publisher.available_actions(request.user)[action_name]
-            )
-            buttons[action_name]['field_name'] = '_{}'.format(action_name)
 
         for name, button in buttons.items():
             # Add the language to the button labels for clarity
@@ -135,10 +71,9 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
                         label,
                         language_code.upper(),
                     )
-            # Add the language to the url, so we don't use that context
+            # Add the language to the url, so we don't loose that context
             url = button.get('url', None)
             if not url or '?language=' in url:
-                print 'skipping', url, button
                 continue
             button['url'] = url + '?language={}'.format(language_code)
         return buttons
@@ -253,70 +188,77 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             url = url + '?language={}'.format(language_code)
         return url
 
-    def publisher_handle_actions(self, request, obj):
-        """
-        The Parler version of this uses the translated object instead of the
-        main one for all the actions. The master object is always published
-        together with any translation publishing as a side-effect.
-        """
-        # assert obj.publisher_is_parler_master_model
-        # # This is the parler master model. Switch to the translation model
-        # # so we are working with the right object.
-        # try:
-        #     obj = obj.translations.get(language_code=obj.language_code)
-        # except obj.translations.model.DoesNotExist:
-        #     return None
+    # def publisher_handle_actions(self, request, obj):
+    #     """
+    #     The Parler version of this uses the translated object instead of the
+    #     main one for all the actions. The master object is always published
+    #     together with any translation publishing as a side-effect.
+    #     """
+    #
+    #     # FIXME: check permissions (edit)
+    #     if request.POST and '_create_draft' in request.POST:
+    #         if obj.publisher.is_published_version and obj.publisher.has_pending_changes:
+    #             # There already is a draft. Just redirect to it.
+    #             return HttpResponseRedirect(
+    #                 self.publisher_get_detail_admin_url(
+    #                     obj.publisher.get_draft_version()
+    #                 )
+    #             )
+    #         draft = obj.publisher.create_draft()
+    #         return HttpResponseRedirect(self.publisher_get_detail_admin_url(draft))
+    #     elif request.POST and '_discard_draft' in request.POST:
+    #         published_translation = obj.publisher.get_published_version()
+    #         obj.publisher.discard_draft()
+    #         return HttpResponseRedirect(
+    #             self.publisher_get_detail_or_changelist_url(
+    #                 published_translation.master,
+    #                 language_code=published_translation.language_code,
+    #             ),
+    #         )
+    #     elif request.POST and '_publish' in request.POST:
+    #         # FIXME: check the user_can_publish() permission
+    #         published_translation = obj.publisher.publish()
+    #         return HttpResponseRedirect(
+    #             self.publisher_get_detail_admin_url(
+    #                 published_translation.master,
+    #                 language_code=published_translation.language_code,
+    #             ),
+    #         )
+    #     elif request.POST and '_request_deletion' in request.POST:
+    #         published_translation = obj.publisher.request_deletion()
+    #         return HttpResponseRedirect(
+    #             self.publisher_get_detail_admin_url(
+    #                 published_translation.master,
+    #                 language_code=published_translation.language_code,
+    #             )
+    #         )
+    #     elif request.POST and '_discard_requested_deletion' in request.POST:
+    #         obj.publisher.discard_requested_deletion()
+    #         return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
+    #     elif request.POST and '_publish_deletion' in request.POST:
+    #         obj.publisher.publish_deletion()
+    #         return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
+    #     return None
 
-        # FIXME: check permissions (edit)
-        if request.POST and '_create_draft' in request.POST:
-            if obj.publisher.is_published_version and obj.publisher.has_pending_changes:
-                # There already is a draft. Just redirect to it.
-                return HttpResponseRedirect(
-                    self.publisher_get_detail_admin_url(
-                        obj.publisher.get_draft_version()
-                    )
-                )
-            draft = obj.publisher.create_draft()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(draft))
-        elif request.POST and '_discard_draft' in request.POST:
-            published_translation = obj.publisher.get_published_version()
-            obj.publisher.discard_draft()
-            return HttpResponseRedirect(
-                self.publisher_get_detail_or_changelist_url(
-                    published_translation.master,
-                    language_code=published_translation.language_code,
-                ),
-            )
-        elif request.POST and '_publish' in request.POST:
-            # FIXME: check the user_can_publish() permission
-            published_translation = obj.publisher.publish()
-            return HttpResponseRedirect(
-                self.publisher_get_detail_admin_url(
-                    published_translation.master,
-                    language_code=published_translation.language_code,
-                ),
-            )
-        elif request.POST and '_request_deletion' in request.POST:
-            published_translation = obj.publisher.request_deletion()
-            return HttpResponseRedirect(
-                self.publisher_get_detail_admin_url(
-                    published_translation.master,
-                    language_code=published_translation.language_code,
-                )
-            )
-        elif request.POST and '_discard_requested_deletion' in request.POST:
-            obj.publisher.discard_requested_deletion()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
-        elif request.POST and '_publish_deletion' in request.POST:
-            obj.publisher.publish_deletion()
-            return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
-        return None
+    def publisher_get_status_field_context(self, obj):
+        return {
+            'state': obj.master_publisher.state,
+        }
 
-    def publisher_status_parler(self, obj):
-        context = self.publisher_get_status_field_context(obj)
+    def publisher_translation_states(self, obj):
         return render_to_string(
             'admin/djangocms_publisher/tools/status_label_parler_all.html',
-            context,
+            context={
+                'states': obj.publisher.translation_states,
+            },
         )
-    publisher_status_parler.allow_tags = True
-    publisher_status_parler.short_description = ''
+    publisher_translation_states.allow_tags = True
+    publisher_translation_states.short_description = ''
+
+    def publisher_state_debug(self, obj):
+        return render_to_string(
+            'admin/djangocms_publisher/contrib/parler/debug/state_debug.html',
+            context={'obj': obj},
+        )
+    publisher_state_debug.allow_tags = True
+    publisher_state_debug.short_description = 'publisher state debug'

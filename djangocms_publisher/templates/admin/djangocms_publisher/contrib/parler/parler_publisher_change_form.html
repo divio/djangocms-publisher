@@ -1,0 +1,6 @@
+{% extends 'admin/djangocms_publisher/publisher_change_form.html' %}
+
+{% block field_sets %}
+{% if language_tabs %}{% include 'admin/djangocms_publisher/contrib/parler/language_tabs.html' %}{% endif %}
+{{ block.super }}
+{% endblock %}
