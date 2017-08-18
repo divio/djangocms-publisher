@@ -13,19 +13,19 @@ class ThingAdmin(PublisherAdminMixin, admin.ModelAdmin):
         'name',
         'a_boolean',
         'publisher_is_published_version',
-        'publisher_status',
+        'publisher_state',
     )
     search_fields = (
         'name',
         'attachments__name',
     )
     readonly_fields = (
-        'publisher_status',
+        'publisher_state',
     )
     fieldsets = [
         (None, {
             'fields': (
-                'publisher_status',
+                'publisher_state',
                 'name',
                 'a_boolean',
             ),

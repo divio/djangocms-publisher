@@ -279,14 +279,14 @@ class PublisherAdminMixinBase(object):
             'state': obj.publisher.state,
         }
 
-    def publisher_status(self, obj):
+    def publisher_state(self, obj):
         context = self.publisher_get_status_field_context(obj)
         return render_to_string(
             'admin/djangocms_publisher/tools/status_indicator.html',
             context,
         )
-    publisher_status.allow_tags = True
-    publisher_status.short_description = ''
+    publisher_state.allow_tags = True
+    publisher_state.short_description = ''
 
 
 def get_all_button_defaults():
