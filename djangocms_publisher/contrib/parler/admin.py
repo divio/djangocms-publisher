@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-from copy import copy
-
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied
-from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 from django.utils.encoding import force_text
 from ...admin import PublisherAdminMixinBase, get_all_button_defaults
-from .utils import get_language_tabs
+from . import utils
 
 
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
@@ -34,7 +31,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
 
     def get_language_tabs(self, request, obj, available_languages, css_class=None):
         current_language = self.get_form_language(request, obj)
-        return get_language_tabs(
+        return utils.get_language_tabs(
             request,
             obj=obj,
             current_language=current_language,
@@ -157,7 +154,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             "admin/djangocms_publisher/publisher_change_form.html",
         ))
 
-    def publisher_get_admin_changelist_url(self, obj=None):
+    def publisher_get_admin_changelist_url(self, obj=None, get=None):
         from parler.models import TranslatedFieldsModel
         is_parler_translation = isinstance(obj, TranslatedFieldsModel)
         if is_parler_translation:
@@ -168,77 +165,12 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             master = obj
         return (
             super(PublisherParlerAdminMixin, self)
-            .publisher_get_admin_changelist_url(master)
+            .publisher_get_admin_changelist_url(master, get=get)
         )
 
-    def publisher_get_detail_admin_url(self, obj, language_code=None):
-        from parler.models import TranslatedFieldsModel
-        if not language_code and isinstance(obj, TranslatedFieldsModel):
-            # The url needs to use the id of the master object.
-            language_code = obj.language_code
-            obj = obj.master
-
-        app_label = obj._meta.app_label
-        model_name = obj._meta.model_name
-        url = reverse(
-            'admin:{}_{}_change'.format(app_label, model_name),
-            args=(obj.pk,),
-        )
-        if language_code:
-            url = url + '?language={}'.format(language_code)
-        return url
-
-    # def publisher_handle_actions(self, request, obj):
-    #     """
-    #     The Parler version of this uses the translated object instead of the
-    #     main one for all the actions. The master object is always published
-    #     together with any translation publishing as a side-effect.
-    #     """
-    #
-    #     # FIXME: check permissions (edit)
-    #     if request.POST and '_create_draft' in request.POST:
-    #         if obj.publisher.is_published_version and obj.publisher.has_pending_changes:
-    #             # There already is a draft. Just redirect to it.
-    #             return HttpResponseRedirect(
-    #                 self.publisher_get_detail_admin_url(
-    #                     obj.publisher.get_draft_version()
-    #                 )
-    #             )
-    #         draft = obj.publisher.create_draft()
-    #         return HttpResponseRedirect(self.publisher_get_detail_admin_url(draft))
-    #     elif request.POST and '_discard_draft' in request.POST:
-    #         published_translation = obj.publisher.get_published_version()
-    #         obj.publisher.discard_draft()
-    #         return HttpResponseRedirect(
-    #             self.publisher_get_detail_or_changelist_url(
-    #                 published_translation.master,
-    #                 language_code=published_translation.language_code,
-    #             ),
-    #         )
-    #     elif request.POST and '_publish' in request.POST:
-    #         # FIXME: check the user_can_publish() permission
-    #         published_translation = obj.publisher.publish()
-    #         return HttpResponseRedirect(
-    #             self.publisher_get_detail_admin_url(
-    #                 published_translation.master,
-    #                 language_code=published_translation.language_code,
-    #             ),
-    #         )
-    #     elif request.POST and '_request_deletion' in request.POST:
-    #         published_translation = obj.publisher.request_deletion()
-    #         return HttpResponseRedirect(
-    #             self.publisher_get_detail_admin_url(
-    #                 published_translation.master,
-    #                 language_code=published_translation.language_code,
-    #             )
-    #         )
-    #     elif request.POST and '_discard_requested_deletion' in request.POST:
-    #         obj.publisher.discard_requested_deletion()
-    #         return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
-    #     elif request.POST and '_publish_deletion' in request.POST:
-    #         obj.publisher.publish_deletion()
-    #         return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
-    #     return None
+    def publisher_get_detail_admin_url(self, obj, get=None):
+        translation = obj.get_translation(obj.language_code)
+        return utils.get_admin_change_url_for_translation(translation, get=get)
 
     def publisher_get_status_field_context(self, obj):
         return {
@@ -253,7 +185,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             },
         )
     publisher_translation_states.allow_tags = True
-    publisher_translation_states.short_description = ''
+    publisher_translation_states.short_description = '<strong>EN</strong> DE FR'
 
     def publisher_state_debug(self, obj):
         return render_to_string(
@@ -262,3 +194,8 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         )
     publisher_state_debug.allow_tags = True
     publisher_state_debug.short_description = 'publisher state debug'
+
+
+utils.publisher_translation_states_admin_fields(
+    admin=PublisherParlerAdminMixin,
+)

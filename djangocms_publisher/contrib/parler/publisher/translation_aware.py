@@ -177,11 +177,13 @@ class ParlerPublisher(Publisher):
         return result
 
     def translation_states(self, all_translations=None):
-        site_id = getattr(settings, 'SITE_ID', None)
-        all_language_codes = [
-            lang_dict['code']
-            for lang_dict in settings.PARLER_LANGUAGES.get(site_id, ())
-        ]
+        return (
+            self.translation_states_dict(all_translations=all_translations)
+            .values()
+        )
+
+    def translation_states_dict(self, all_translations=None):
+        all_language_codes = [code for code, name in settings.LANGUAGES]
         if all_translations is None:
             all_translations = {
                 trans.language_code: trans
@@ -198,4 +200,4 @@ class ParlerPublisher(Publisher):
                     'text': _('Does not exist'),
                     'language_code': language_code,
                 }
-        return all_states.values()
+        return all_states

@@ -1,0 +1,6 @@
+.column-publisher_status {
+    width: 1%;
+}
+[class*=column-publisher_translation_state_] {
+    width: 1%;
+}

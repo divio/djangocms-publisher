@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
+
+from functools import partial
+
 from django.conf import settings
+from django.http import QueryDict
+from django.template.loader import render_to_string
 from django.utils.translation import ugettext_lazy as _
 
 from parler import appsettings
@@ -21,8 +26,10 @@ class Tab(object):
 
 
 def get_admin_change_url_for_translation(translation, get):
-    obj = translation.master
-    opts = obj._meta
+    if get is None:
+        get = QueryDict()
+    get = get.copy()
+    opts = translation.master._meta
     url_name = 'admin:%s_%s_%s' % (opts.app_label, opts.model_name, 'change')
     get['language'] = translation.language_code
     return reverse(
@@ -46,9 +53,8 @@ def get_language_tabs(request, obj, current_language, available_languages, css_c
     else:
         is_draft_version = True
         all_translations = {}
-    site_id = getattr(settings, 'SITE_ID', None)
-    for lang_dict in appsettings.PARLER_LANGUAGES.get(site_id, ()):
-        code = lang_dict['code']
+    all_language_codes = [code for code, name in settings.LANGUAGES]
+    for code in all_language_codes:
         title = get_language_title(code)
         get = request.GET.copy()
         get['language'] = code
@@ -107,3 +113,39 @@ def get_empty_publisher_state(language_code):
         'text': _('Does not exist'),
         'language_code': language_code,
     }
+
+
+def publisher_translation_state_for_language(obj, **kwargs):
+    language_code = kwargs['language_code']
+    states = obj.publisher.translation_states_dict()
+    return render_to_string(
+        'admin/djangocms_publisher/tools/status_indicator.html',
+        context={'state': states.get(language_code)}
+    )
+
+
+def publisher_translation_states_admin_fields(admin):
+    languages = [code for code, name in settings.LANGUAGES]
+    for language_code in languages:
+        code = language_code.lower().replace('-', '_')
+        name = 'publisher_translation_state_{}'.format(code)
+        method = partial(
+            publisher_translation_state_for_language,
+            language_code=code,
+        )
+        method.allow_tags = True
+        method.short_description = code.upper()
+        setattr(admin, name, method)
+
+
+def publisher_translation_states_admin_field_names():
+    language_codes = [code for code, name in settings.LANGUAGES]
+    return [
+        publisher_translation_states_admin_field_name(code)
+        for code in language_codes
+    ]
+
+
+def publisher_translation_states_admin_field_name(language_code):
+    language_code = language_code.lower().replace('-', '_')
+    return 'publisher_translation_state_{}'.format(language_code)

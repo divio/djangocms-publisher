@@ -11,8 +11,6 @@ from django.http import HttpResponseRedirect
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 
-from .utils.compat import PARLER_IS_INSTALLED
-
 
 class PublisherAdminMixinBase(object):
     @property
@@ -22,6 +20,7 @@ class PublisherAdminMixinBase(object):
             css={
                 'all': (
                     static_with_version('cms/css/cms.pagetree.css'),
+                    'djangocms_publisher/admin/djangocms_publisher.admin.css',
                 ),
             },
         )
@@ -39,17 +38,17 @@ class PublisherAdminMixinBase(object):
             readonly_fields = readonly_fields | all_field_names
         return list(readonly_fields)
 
-    def publisher_get_detail_or_changelist_url(self, obj):
+    def publisher_get_detail_or_changelist_url(self, obj, get=None):
         if not obj or obj and not obj.pk:  # No pk means the object was deleted
-            return self.publisher_get_admin_changelist_url(obj)
+            return self.publisher_get_admin_changelist_url(obj, get=get)
         else:
-            return self.publisher_get_detail_admin_url(obj)
+            return self.publisher_get_detail_admin_url(obj, get=get)
 
-    def publisher_get_detail_admin_url(self, obj):
+    def publisher_get_detail_admin_url(self, obj, get=None):
         info = obj._meta.app_label, obj._meta.model_name
         return reverse('admin:{}_{}_change'.format(*info), args=(obj.pk,))
 
-    def publisher_get_admin_changelist_url(self, obj=None):
+    def publisher_get_admin_changelist_url(self, obj=None, get=None):
         info = obj._meta.app_label, obj._meta.model_name
         return reverse('admin:{}_{}_changelist'.format(*info))
 
@@ -250,7 +249,8 @@ class PublisherAdminMixinBase(object):
                 # There already is a draft. Just redirect to it.
                 return HttpResponseRedirect(
                     self.publisher_get_detail_admin_url(
-                        obj.publisher.get_draft_version()
+                        obj.publisher.get_draft_version(),
+                        get=request.GET,
                     )
                 )
             draft = obj.publisher.create_draft()
@@ -258,20 +258,20 @@ class PublisherAdminMixinBase(object):
         elif request.POST and '_discard_draft' in request.POST:
             published = obj.publisher.get_published_version()
             obj.publisher.discard_draft()
-            return HttpResponseRedirect(self.publisher_get_detail_or_changelist_url(published))
+            return HttpResponseRedirect(self.publisher_get_detail_or_changelist_url(published, get=request.GET))
         elif request.POST and '_publish' in request.POST:
             # FIXME: check the user_can_publish() permission
             published = obj.publisher.publish()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
+            return HttpResponseRedirect(self.publisher_get_detail_admin_url(published, get=request.GET))
         elif request.POST and '_request_deletion' in request.POST:
             published = obj.publisher.request_deletion()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(published))
+            return HttpResponseRedirect(self.publisher_get_detail_admin_url(published, get=request.GET))
         elif request.POST and '_discard_requested_deletion' in request.POST:
             obj.publisher.discard_deletion_request()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
+            return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj, get=request.GET))
         elif request.POST and '_publish_deletion' in request.POST:
             obj.publisher.publish_deletion()
-            return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
+            return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj, get=request.GET))
         return None
 
     def publisher_get_status_field_context(self, obj):

@@ -5,6 +5,9 @@ from django.contrib import admin
 
 from djangocms_publisher.contrib.parler.admin import PublisherParlerAdminMixin
 from parler.admin import TranslatableAdmin
+
+from djangocms_publisher.contrib.parler.utils import \
+    publisher_translation_states_admin_field_names
 from . import models
 
 
@@ -12,10 +15,7 @@ class ParlerThingAdmin(PublisherParlerAdminMixin, TranslatableAdmin):
     list_display = (
         'name',
         'publisher_status',
-        'publisher_translation_states',
-        'a_boolean',
-        'publisher_is_published_version',
-    )
+    ) + tuple(publisher_translation_states_admin_field_names())
     search_fields = (
         'translations__name',
         'attachments__name',
