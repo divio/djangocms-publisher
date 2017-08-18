@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
-from .publisher import Publisher, DEFAULT_COPY_EXCLUDE_FIELDS
+from .publisher import Publisher, PUBLISHER_STATE_CHOICES
 
 
 class PublisherQuerySetMixin(object):

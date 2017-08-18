@@ -32,7 +32,7 @@ class ParlerTranslationPublishTestCase(TestCase):
         self.assertTrue(translation_draft_de.publisher.is_draft_version)
 
         draft_de = refresh_from_db(draft)
-        draft_de.set_current_language('en')
+        draft_de.set_current_language('de')
 
         self.assertTrue(draft_de.publisher.is_draft_version)
 
@@ -50,7 +50,7 @@ class ParlerTranslationPublishTestCase(TestCase):
         self.assertTrue(ParlerThing.objects.filter(id=draft.pk).exists())
 
         draft = refresh_from_db(draft)
-        self.assertTrue(draft.publisher_is_draft_version)
+        self.assertFalse(draft.publisher_is_published_version)
 
         # Publish en translation
         draft_en = refresh_from_db(draft)

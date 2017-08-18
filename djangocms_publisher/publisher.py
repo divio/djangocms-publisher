@@ -15,6 +15,17 @@ from .utils.copying import (
 from .utils import relations
 
 
+PUBLISHER_STATE_CHOICES = (
+    ('published', 'Published'),
+    ('not_published', 'Not published'),
+    ('pending_changes', 'Published, pending changes'),
+    ('pending_deletion', 'Published, pending deletion'),
+    # nocontent is for a case where there is no content at all, neither
+    # draft nor published. Only relevant for translations of a main object.
+    ('empty', 'No Content'),
+)
+
+
 class Publisher(object):
     """
     Discriptor for use on objects that should get draft/published funtionality.
