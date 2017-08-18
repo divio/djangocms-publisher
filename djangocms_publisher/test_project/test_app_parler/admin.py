@@ -28,7 +28,6 @@ class ParlerThingAdmin(PublisherParlerAdminMixin, TranslatableAdmin):
     fieldsets = [
         (None, {
             'fields': (
-                'publisher_status',
                 'name',
                 'a_boolean',
             ),
@@ -36,6 +35,7 @@ class ParlerThingAdmin(PublisherParlerAdminMixin, TranslatableAdmin):
         ('Debug', {
             'fields': (
                 'publisher_state_debug',
+                'publisher_status',
             )
         })
     ]
