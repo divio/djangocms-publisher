@@ -4,13 +4,19 @@ from __future__ import unicode_literals
 
 from django.db import models
 from django.db.models import Q
-from django.utils.encoding import python_2_unicode_compatible
-from djangocms_publisher.models import PublisherModelMixin, \
-    PublisherQuerySetMixin, ParlerPublisherTranslatedFields
+from django.utils.encoding import python_2_unicode_compatible, force_text
+from djangocms_publisher.models import (
+    PublisherQuerySetMixin,
+)
+from djangocms_publisher.contrib.parler.models import (
+    ParlerPublisherModelMixin,
+    ParlerPublisherTranslatedFields,
+)
 from parler.models import TranslatableModel
+from parler.managers import TranslatableQuerySet
 
 
-class ParlerThingQuerySet(PublisherQuerySetMixin, models.QuerySet):
+class ParlerThingQuerySet(PublisherQuerySetMixin, TranslatableQuerySet):
     def search(self, term):
         return self.filter(
             Q(name__icontains=term) |
@@ -19,7 +25,7 @@ class ParlerThingQuerySet(PublisherQuerySetMixin, models.QuerySet):
 
 
 @python_2_unicode_compatible
-class ParlerThing(PublisherModelMixin, TranslatableModel):
+class ParlerThing(ParlerPublisherModelMixin, TranslatableModel):
     a_boolean = models.BooleanField(blank=True, default=False)
 
     related_things = models.ManyToManyField('self', symmetrical=False)
@@ -35,7 +41,10 @@ class ParlerThing(PublisherModelMixin, TranslatableModel):
     objects = ParlerThingQuerySet.as_manager()
 
     def __str__(self):
-        return self.publisher_add_status_label(self.name)
+        return force_text(self.id)
+        return self.publisher.add_status_label(
+            super(ParlerThing, self).__str__()
+        )
 
     def can_publish(self):
         assert self.is_draft

@@ -32,18 +32,6 @@ class PublishTestCase(TestCase):
         self.assertEqual(draft.publisher.is_published_version, draft.publisher_is_published_version)
         self.assertEqual(draft.publisher.is_draft_version, not draft.publisher_is_published_version)
 
-        draft.publisher.is_published_version = True
-        self.assertEqual(draft.publisher_is_published_version, True)
-
-        draft.publisher.is_published_version = False
-        self.assertEqual(draft.publisher_is_published_version, False)
-
-        draft.publisher.is_draft_version = False
-        self.assertEqual(draft.publisher_is_published_version, True)
-
-        draft.publisher.is_draft_version = True
-        self.assertEqual(draft.publisher_is_published_version, False)
-
     def test_full_workflow(self):
         attachment_names = ('att1', 'att2', 'att3')
         draft = self._create_draft(

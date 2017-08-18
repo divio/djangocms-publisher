@@ -19,7 +19,7 @@ HELPER_SETTINGS = {
         'parler',
         'djangocms_publisher',
         'djangocms_publisher.test_project.test_app',
-        # 'djangocms_publisher.test_project.test_app_parler',
+        'djangocms_publisher.test_project.test_app_parler',
     ],
     'LANGUAGE_CODE': 'en',
     'LANGUAGES': (

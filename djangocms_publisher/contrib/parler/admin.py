@@ -2,7 +2,6 @@
 from __future__ import unicode_literals
 
 from copy import copy
-from parler.utils.compat import transaction_atomic
 
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied
@@ -34,19 +33,19 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
 
         languages = [tab[2] for tab in tabs]
 
-        if obj.publisher_is_published_version:
-            draft_translations = obj.publisher_has_pending_changes
+        if obj.publisher.is_published_version:
+            # draft_translations = obj.publisher.has_pending_changes
             published_translations = obj.translations.filter(language_code__in=languages)
 
-            if obj.publisher_has_pending_changes:
-                draft_translations = obj.publisher_draft_version.translations.filter(language_code__in=languages)
+            if obj.publisher.has_pending_changes:
+                draft_translations = obj.publisher.get_draft_version().translations.filter(language_code__in=languages)
             else:
                 draft_translations = published_translations.none()
         else:
             draft_translations = obj.translations.filter(language_code__in=languages)
 
-            if obj.publisher_has_published_version:
-                published_translations = obj.publisher_published_version.translations.filter(language_code__in=languages)
+            if obj.publisher.has_published_version:
+                published_translations = obj.publisher.get_published_version().translations.filter(language_code__in=languages)
             else:
                 published_translations = draft_translations.none()
 
@@ -58,12 +57,12 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             draft_translation = draft_translations_by_language.get(language)
             published_translation = published_translations_by_language.get(language)
 
-            if published_translation and obj.publisher_is_draft_version:
+            if published_translation and obj.publisher.is_draft_version:
                 # change link to point to published version of language
                 url_name = 'admin:%s_%s_%s' % (self.opts.app_label, self.opts.model_name, 'change')
                 tabs[pos] = list(tabs[pos])
                 tabs[pos][0] = reverse(url_name, args=[published_translation.master_id]) + tabs[pos][0]
-            elif not published_translation and obj.publisher_is_published_version:
+            elif not published_translation and obj.publisher.is_published_version:
                 # User is on published version of master object
                 # but there's no published version for tab language
                 if draft_translation:
@@ -93,8 +92,8 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         translation = obj.translations.get(language_code=language_code)
         defaults = get_all_button_defaults()
         if (
-            translation.translation_publisher.is_published_version and
-            translation.translation_publisher.has_pending_changes
+            translation.publisher.is_published_version and
+            translation.publisher.has_pending_changes
         ):
             # In this case we need to put the correct action here for linking
             # to the draft instead of creating it.
@@ -107,8 +106,8 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             )
             buttons[action_name]['has_permission'] = True
         elif (
-            translation.translation_publisher.is_published_version and
-            not translation.translation_publisher.has_pending_changes
+            translation.publisher.is_published_version and
+            not translation.publisher.has_pending_changes
         ):
             # In this case we need to put the correct action here for linking
             # to the draft instead of creating it.
@@ -116,7 +115,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             action_name = 'create_draft'
             buttons[action_name] = copy(defaults[action_name])
             buttons[action_name].update(
-                translation.translation_publisher.available_actions(request.user)[action_name]
+                translation.publisher.available_actions(request.user)[action_name]
             )
             buttons[action_name]['field_name'] = '_{}'.format(action_name)
 
@@ -144,7 +143,6 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             button['url'] = url + '?language={}'.format(language_code)
         return buttons
 
-    @transaction_atomic
     def delete_translation(self, request, object_id, language_code):
         root_model = self.model._parler_meta.root_model
         try:
@@ -152,12 +150,12 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         except root_model.DoesNotExist:
             raise Http404
         is_published_version_and_deletion_already_requested = (
-            translation.translation_publisher.is_published_version and
-            translation.translation_publisher.has_pending_deletion_request
+            translation.publisher.is_published_version and
+            translation.publisher.has_pending_deletion_request
         )
         is_draft_version_and_no_published_version_exists = (
-            translation.translation_publisher.is_draft_version and
-            not translation.translation_publisher.has_published_version
+            translation.publisher.is_draft_version and
+            not translation.publisher.has_published_version
         )
         if (
             is_published_version_and_deletion_already_requested or
@@ -177,7 +175,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         if not self.has_change_permission(request, translation.master):
             raise PermissionDenied
         if request.method == 'POST':
-            published_translation = translation.translation_publisher.request_deletion()
+            published_translation = translation.publisher.request_deletion()
             return HttpResponseRedirect(
                 self.publisher_get_detail_admin_url(published_translation)
             )
@@ -261,28 +259,28 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         main one for all the actions. The master object is always published
         together with any translation publishing as a side-effect.
         """
-        assert obj.publisher_is_parler_master_model
-        # This is the parler master model. Switch to the translation model
-        # so we are working with the right object.
-        try:
-            obj = obj.translations.get(language_code=obj.language_code)
-        except obj.translations.model.DoesNotExist:
-            return None
+        # assert obj.publisher_is_parler_master_model
+        # # This is the parler master model. Switch to the translation model
+        # # so we are working with the right object.
+        # try:
+        #     obj = obj.translations.get(language_code=obj.language_code)
+        # except obj.translations.model.DoesNotExist:
+        #     return None
 
         # FIXME: check permissions (edit)
         if request.POST and '_create_draft' in request.POST:
-            if obj.translation_publisher.is_published_version and obj.translation_publisher.has_pending_changes:
+            if obj.publisher.is_published_version and obj.publisher.has_pending_changes:
                 # There already is a draft. Just redirect to it.
                 return HttpResponseRedirect(
                     self.publisher_get_detail_admin_url(
-                        obj.translation_publisher.get_draft_version()
+                        obj.publisher.get_draft_version()
                     )
                 )
-            draft = obj.translation_publisher.create_draft()
+            draft = obj.publisher.create_draft()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(draft))
         elif request.POST and '_discard_draft' in request.POST:
-            published_translation = obj.translation_publisher.get_published_version()
-            obj.translation_publisher.discard_draft()
+            published_translation = obj.publisher.get_published_version()
+            obj.publisher.discard_draft()
             return HttpResponseRedirect(
                 self.publisher_get_detail_or_changelist_url(
                     published_translation.master,
@@ -291,7 +289,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             )
         elif request.POST and '_publish' in request.POST:
             # FIXME: check the user_can_publish() permission
-            published_translation = obj.translation_publisher.publish()
+            published_translation = obj.publisher.publish()
             return HttpResponseRedirect(
                 self.publisher_get_detail_admin_url(
                     published_translation.master,
@@ -299,7 +297,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
                 ),
             )
         elif request.POST and '_request_deletion' in request.POST:
-            published_translation = obj.translation_publisher.request_deletion()
+            published_translation = obj.publisher.request_deletion()
             return HttpResponseRedirect(
                 self.publisher_get_detail_admin_url(
                     published_translation.master,
@@ -307,10 +305,10 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
                 )
             )
         elif request.POST and '_discard_requested_deletion' in request.POST:
-            obj.translation_publisher.discard_requested_deletion()
+            obj.publisher.discard_requested_deletion()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj))
         elif request.POST and '_publish_deletion' in request.POST:
-            obj.translation_publisher.publish_deletion()
+            obj.publisher.publish_deletion()
             return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj))
         return None
 
