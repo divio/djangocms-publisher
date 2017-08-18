@@ -113,7 +113,6 @@ class PublisherAdminMixinBase(object):
                 has_change_permission=has_change_permission,
                 has_delete_permission=has_delete_permission,
             )
-            print "DEFAULT BUTTONS!"
             return buttons
 
         if obj and obj.pk and obj.publisher.is_draft_version and has_change_permission:

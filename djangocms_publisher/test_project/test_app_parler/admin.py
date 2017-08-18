@@ -14,14 +14,13 @@ from . import models
 class ParlerThingAdmin(PublisherParlerAdminMixin, TranslatableAdmin):
     list_display = (
         'name',
-        'publisher_status',
     ) + tuple(publisher_translation_states_admin_field_names())
     search_fields = (
         'translations__name',
         'attachments__name',
     )
     readonly_fields = (
-        'publisher_status',
+        'publisher_state',
         'publisher_translation_states',
         'publisher_state_debug',
     )
@@ -35,7 +34,7 @@ class ParlerThingAdmin(PublisherParlerAdminMixin, TranslatableAdmin):
         ('Debug', {
             'fields': (
                 'publisher_state_debug',
-                'publisher_status',
+                'publisher_state',
             )
         })
     ]

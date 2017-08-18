@@ -38,6 +38,20 @@ def get_admin_change_url_for_translation(translation, get):
     ) + '?{0}'.format(get.urlencode())
 
 
+def get_admin_change_url(obj, language_code=None, get=None):
+    if get is None:
+        get = QueryDict()
+    get = get.copy()
+    if language_code:
+        get['language'] = language_code
+    opts = obj._meta
+    url_name = 'admin:%s_%s_%s' % (opts.app_label, opts.model_name, 'change')
+    return reverse(
+        url_name,
+        args=[obj.id]
+    ) + '?{0}'.format(get.urlencode())
+
+
 def get_language_tabs(request, obj, current_language, available_languages, css_class=None):
     """
     Determine the language tabs to show.
@@ -53,6 +67,8 @@ def get_language_tabs(request, obj, current_language, available_languages, css_c
     else:
         is_draft_version = True
         all_translations = {}
+    from pprint import pprint as pp
+    pp(all_translations)
     all_language_codes = [code for code, name in settings.LANGUAGES]
     for code in all_language_codes:
         title = get_language_title(code)
@@ -60,6 +76,7 @@ def get_language_tabs(request, obj, current_language, available_languages, css_c
         get['language'] = code
         translation = all_translations.get(code)
         if translation:
+            print translation.language_code, translation.master_id
             url = get_admin_change_url_for_translation(translation, get)
             publisher_state = translation.publisher.state
         else:
@@ -102,7 +119,7 @@ def get_language_tabs(request, obj, current_language, available_languages, css_c
     tabs.current_is_translated = current_language in all_translations.keys()
     # FIXME: show correct deletion possibilities based on publisher state
     # tabs.allow_deletion = len(available_languages) > 1
-    tabs.allow_deletion = True
+    tabs.allow_deletion = False
     return tabs
 
 

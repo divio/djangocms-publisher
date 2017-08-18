@@ -149,7 +149,11 @@ class ParlerTranslationPublisher(Publisher):
         return self.create_draft(), True
 
     def publish_deletion(self):
-        # FIXME: implement deletion publication
+        # FIXME: implement translation.publish_deletion
+        pass
+
+    def discard_deletion_request(self):
+        # FIXME: implement translation.discard_deletion_request
         pass
 
     @property

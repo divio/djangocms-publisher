@@ -213,7 +213,6 @@ class OldParlerPublisher(object):
         return draft_translation
 
     def copy_relations(self, old_obj):
-        import ipdb; ipdb.set_trace()
         # Call a method on the master object so any app specific releations can
         # be copied (e.g Placeholders or relations on the translated obj)
         new_translation = self.instance

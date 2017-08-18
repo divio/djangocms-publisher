@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 
 from django.contrib.admin.utils import unquote
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
 from django.http import HttpResponseRedirect, Http404
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -169,7 +169,19 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         )
 
     def publisher_get_detail_admin_url(self, obj, get=None):
-        translation = obj.get_translation(obj.language_code)
+        try:
+            translation = obj.get_translation(obj.language_code)
+        except ObjectDoesNotExist:
+            # FIXME: This should not happen. But it does. Seems to try to get
+            #        the default language sometimes. And if that does not exist
+            #        it goes boom.
+            return (
+                utils
+                .get_admin_change_url(
+                    obj,
+                    language_code=obj.language_code,
+                    get=get,
+                ))
         return utils.get_admin_change_url_for_translation(translation, get=get)
 
     def publisher_get_status_field_context(self, obj):

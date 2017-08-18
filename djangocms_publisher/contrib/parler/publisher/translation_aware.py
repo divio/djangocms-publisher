@@ -153,6 +153,7 @@ class ParlerPublisher(Publisher):
             master_pks.add(draft.pk)
         if published:
             master_pks.add(published.pk)
+        print(master_pks)
         qs = self.instance._parler_meta.root_model.objects.filter(master_id__in=master_pks)
         translations = {}
         for translation in qs:
