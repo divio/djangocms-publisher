@@ -97,7 +97,9 @@ class ParlerPublisher(Publisher):
         language_code = self.instance.language_code
         published_translation = self.instance.get_translation(language_code)
         draft_translation = published_translation.publisher.create_draft()
-        return draft_translation
+        draft = draft_translation.master
+        draft.set_current_language(language_code)
+        return draft
 
     def copy_relations(self, old_obj):
         # Call a method on the master object so any app specific relations can

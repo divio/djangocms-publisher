@@ -129,7 +129,7 @@ class ParlerTranslationPublisher(Publisher):
                 defaults=fields_to_copy,
             )
         )
-        draft_translation.translation_publisher.copy_relations(
+        draft_translation.publisher.copy_relations(
             old_obj=published_translation,
         )
         return draft_translation

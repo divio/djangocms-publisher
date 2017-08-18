@@ -36,6 +36,17 @@ class Publisher(object):
         self.name = name
 
     def get_publisher(self, obj):
+        """
+        Returns the publisher instance for the given object with the same name
+        is this current instance.
+        It is important to use this to get the publisher of a other object of
+        the same type to stay within the same publisher for cases where there
+        are multiple. Namely with the django-parler publishers when calling
+        things on the master_publisher all operations called from the
+        master_publisher should stay within the master_publisher.
+        :param obj:
+        :return:
+        """
         return getattr(obj, self.name)
 
     @property

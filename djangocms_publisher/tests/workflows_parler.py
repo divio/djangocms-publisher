@@ -70,36 +70,53 @@ class ParlerTranslationPublishTestCase(TestCase):
 
         # FIXME: Test actual fields and relationship updating
 
-    # def test_create_draft(self):
-    #     published = ParlerThing(publisher_is_published_version=True)
-    #     published.save()
-    #     self.assertTrue(published.publisher_is_published_version)
-    #     published.translations.create(
-    #         language_code='en',
-    #         name='EN Translation',
-    #     )
-    #     published.translations.create(
-    #         language_code='de',
-    #         name='DE Translation',
-    #     )
-    #     published_de = published.translations.get(language_code='de')
-    #     self.assertTrue(published.publisher_is_published_version)
-    #     self.assertTrue(published_de.translation_publisher.is_published_version)
-    #
-    #     # Create draft translation
-    #     draft_de = published_de.translation_publisher.create_draft()
-    #
-    #     draft_de = refresh_from_db(draft_de)
-    #     published_de = refresh_from_db(published_de)
-    #     self.assertTrue(draft_de.translation_publisher.is_draft_version)
-    #     self.assertTrue(draft_de.master.publisher_is_draft_version)
-    #     self.assertEqual(
-    #         draft_de.master.publisher_published_version_id,
-    #         published_de.master.id
-    #     )
-    #     # Check that the name was correctly copied over
-    #     self.assertEqual(draft_de.name, published_de.name)
-    #
+    def test_create_draft(self):
+        published = ParlerThing(publisher_is_published_version=True)
+        published.save()
+        self.assertTrue(published.publisher_is_published_version)
+        self.assertTrue(published.master_publisher.is_published_version)
+        published.translations.create(
+            language_code='en',
+            name='EN Translation',
+        )
+        published.translations.create(
+            language_code='de',
+            name='DE Translation',
+        )
+        published_translation_de = published.translations.get(language_code='de')
+        self.assertTrue(published_translation_de.publisher.is_published_version)
+        self.assertTrue(published_translation_de.master.publisher_is_published_version)
+
+        # Create draft translation
+        published_de = refresh_from_db(published)
+        published_de.set_current_language('de')
+
+        draft_de = published_de.publisher.create_draft()
+
+        self.assertEqual(draft_de.language_code, 'de')
+
+        draft_de = refresh_from_db(draft_de)
+        draft_de.set_current_language('de')
+        published_de = refresh_from_db(published_de)
+        published_de.set_current_language('de')
+
+        self.assertTrue(draft_de.publisher.is_draft_version)
+        self.assertFalse(draft_de.publisher_is_published_version)
+        self.assertEqual(
+            draft_de.publisher_published_version_id,
+            published_de.id
+        )
+        self.assertEqual(
+            draft_de.get_translation('de').publisher.get_published_version(),
+            published_translation_de,
+        )
+        # Check that the name was correctly copied over
+        self.assertEqual(draft_de.name, published_de.name)
+        self.assertEqual(
+            draft_de.get_translation('de').name,
+            published_de.get_translation('de').name,
+        )
+
     # def test_request_translation_deletion(self):
     #     published = ParlerThing(publisher_is_published_version=True)
     #     published.save()
