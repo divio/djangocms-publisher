@@ -17,17 +17,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
 
     @property
     def change_form_template(self):
-        """
-        Dynamic property to support transition to regular models.
-
-        This automatically picks ``admin/parler/change_form.html`` when the admin uses a translatable model.
-        """
-        if self._has_translatable_model():
-            # While this breaks the admin template name detection,
-            # the get_change_form_base_template() makes sure it inherits from your template.
-            return 'admin/djangocms_publisher/contrib/parler/parler_publisher_change_form.html'
-        else:
-            return None # get default admin selection
+        return 'admin/djangocms_publisher/contrib/parler/parler_publisher_change_form.html'
 
     def get_language_tabs(self, request, obj, available_languages, css_class=None):
         current_language = self.get_form_language(request, obj)
