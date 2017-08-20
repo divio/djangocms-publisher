@@ -25,10 +25,30 @@
             </button>
         </p>
     {% else %}
+{#        <button#}
+{#            type="submit"#}
+{#            value="{{ button.label }}"#}
+{#            name="{{ button.field_name }}"#}
+{#            {% if button.formaction %}#}
+{#                formaction="{{ button.formaction }}"#}
+{#            {% endif %}#}
+{#            {% if button.class %}class="{{ button.class }}"{% endif %}#}
+{#            {% if not button.has_permission %}#}
+{#                disabled="disabled"#}
+{#                {% if button.disabled_message %}#}
+{#                    title="{{ button.disabled_message }}"#}
+{#                {% endif %}#}
+{#            {% endif %}#}
+{#        >#}
+{#            {{ button.label }}#}
+{#        </button>#}
         <input
             type="submit"
             value="{{ button.label }}"
             name="{{ button.field_name }}"
+            {% if button.formaction %}
+                formaction="{{ button.formaction }}"
+            {% endif %}
             {% if button.class %}class="{{ button.class }}"{% endif %}
             {% if not button.has_permission %}
                 disabled="disabled"

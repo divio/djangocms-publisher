@@ -5,11 +5,16 @@ from collections import OrderedDict
 from copy import copy
 
 from cms.utils.urlutils import static_with_version
+from django.conf.urls import url
+from django.contrib.admin.utils import unquote
 from django.forms.widgets import Media
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, Http404
+from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
+
+from . import admin_views
 
 
 class PublisherAdminMixinBase(object):
@@ -51,6 +56,26 @@ class PublisherAdminMixinBase(object):
     def publisher_get_admin_changelist_url(self, obj=None, get=None):
         info = obj._meta.app_label, obj._meta.model_name
         return reverse('admin:{}_{}_changelist'.format(*info))
+
+    def publisher_get_admin_action_url(self, obj, action, get=None):
+        opts = obj._meta
+        return reverse(
+            'admin:{}_{}_publisher_{}'.format(
+                opts.app_label,
+                opts.model_name,
+                action,
+            ),
+            args=(obj.pk,)
+        )
+
+    def publisher_get_admin_request_deletion_url(self, **kwargs):
+        return self.publisher_get_admin_action_url(action='request_deletion', **kwargs)
+
+    def publisher_get_admin_discard_deletion_request_url(self,  **kwargs):
+        return self.publisher_get_admin_action_url(action='discard_deletion_request', **kwargs)
+
+    def publisher_get_admin_discard_draft_url(self, **kwargs):
+        return self.publisher_get_admin_action_url(action='discard_draft', **kwargs)
 
     def publisher_get_is_enabled(self, request, obj):
         # This allows subclasses to disable draft-live logic. Returning False
@@ -168,8 +193,18 @@ class PublisherAdminMixinBase(object):
             for action in obj.publisher.available_actions(request.user).values():
                 action_name = action['name']
                 buttons[action_name] = copy(defaults[action_name])
-                buttons[action_name].update(action)
-                buttons[action_name]['field_name'] = '_{}'.format(action_name)
+                btn = buttons[action_name]
+                btn.update(action)
+                if action_name == 'request_deletion':
+                    # Show link to the request deletion view
+                    btn['url'] = self.publisher_get_admin_request_deletion_url(obj=obj, get=request.GET)
+                elif action_name == 'discard_requested_deletion':
+                    btn['url'] = self.publisher_get_admin_discard_deletion_request_url(obj=obj, get=request.GET)
+                elif action_name == 'discard_draft':
+                    btn['url'] = self.publisher_get_admin_discard_draft_url(obj=obj, get=request.GET)
+                else:
+                    # Default is to use the action together with saving
+                    btn['field_name'] = '_{}'.format(action_name)
 
         if not has_publish_permission:
             for action_name in ('publish', 'publish_deletion'):
@@ -229,6 +264,11 @@ class PublisherAdminMixinBase(object):
             request, object_id, form_url=form_url, extra_context=extra_context)
 
     def response_change(self, request, obj):
+        """
+        On response_change we intentionally handle actions after the save has
+        happened, so clicking on "publish" on a draft will save current changes
+        in the form before publishing.
+        """
         response = self.publisher_handle_actions(request, obj)
         if response:
             return response
@@ -236,11 +276,8 @@ class PublisherAdminMixinBase(object):
 
     def publisher_handle_actions(self, request, obj):
         """
-        Overrides the default response_change to handle all the publisher
-        workflow actions. This is intentionally after the save has happened,
-        so clicking on "publish" on
-        a draft will save current changes in the
-        form before publishing.
+        Used to handle the publisher workflow actions on response_change and
+        change_view.
         """
         # FIXME: check permissions (edit)
         if request.POST and '_create_draft' in request.POST:
@@ -254,24 +291,73 @@ class PublisherAdminMixinBase(object):
                 )
             draft = obj.publisher.create_draft()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(draft))
-        elif request.POST and '_discard_draft' in request.POST:
-            published = obj.publisher.get_published_version()
-            obj.publisher.discard_draft()
-            return HttpResponseRedirect(self.publisher_get_detail_or_changelist_url(published, get=request.GET))
+        # elif request.POST and '_discard_draft' in request.POST:
+        #     published = obj.publisher.get_published_version()
+        #     obj.publisher.discard_draft()
+        #     return HttpResponseRedirect(self.publisher_get_detail_or_changelist_url(published, get=request.GET))
         elif request.POST and '_publish' in request.POST:
             # FIXME: check the user_can_publish() permission
             published = obj.publisher.publish()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(published, get=request.GET))
-        elif request.POST and '_request_deletion' in request.POST:
-            published = obj.publisher.request_deletion()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(published, get=request.GET))
-        elif request.POST and '_discard_requested_deletion' in request.POST:
-            obj.publisher.discard_deletion_request()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj, get=request.GET))
+        # elif request.POST and '_request_deletion' in request.POST:
+        #     published = obj.publisher.request_deletion()
+        #     return HttpResponseRedirect(self.publisher_get_detail_admin_url(published, get=request.GET))
+        # elif request.POST and '_discard_requested_deletion' in request.POST:
+        #     obj.publisher.discard_deletion_request()
+        #     return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj, get=request.GET))
         elif request.POST and '_publish_deletion' in request.POST:
             obj.publisher.publish_deletion()
             return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj, get=request.GET))
         return None
+
+    def publisher_get_action_urlpattern(self, view):
+        opts = self.model._meta
+        url_segment = view.action_name.replace('_', '-')
+        url_name = '{0}_{1}_publisher_{2}'.format(
+            opts.app_label,
+            opts.model_name,
+            view.action_name,
+        )
+        return url(
+            r'^(?P<pk>.+)/' + url_segment + r'/$',
+            self.admin_site.admin_view(view.as_view(admin=self)),
+            name=url_name,
+        )
+
+    def get_urls(self):
+        urlpatterns = super(PublisherAdminMixinBase, self).get_urls()
+        return [
+            self.publisher_get_action_urlpattern(admin_views.RequestDeletion),
+            self.publisher_get_action_urlpattern(admin_views.DiscardDeletionRequest),
+            self.publisher_get_action_urlpattern(admin_views.CreateDraft),
+            self.publisher_get_action_urlpattern(admin_views.DiscardDraft),
+            self.publisher_get_action_urlpattern(admin_views.Publish),
+        ] + urlpatterns
+
+    # def publisher_request_deletion_view(self, request, object_id):
+    #     """
+    #     Confirmation to request deletion and action to do it.
+    #     """
+    #     # FIXME: check permissions
+    #     obj = self.get_object(request, unquote(object_id))
+    #     if obj is None:
+    #         raise Http404
+    #     # FIXME: if this is a draft and there is no published obj, redirect to
+    #     #        the delete view.
+    #     if request.POST:
+    #         obj.publisher.request_deletion()
+    #         return HttpResponseRedirect(
+    #             self.publisher_get_detail_admin_url(obj, get=request.GET),
+    #         )
+    #     return render(
+    #         request,
+    #         self.publisher_request_deletion_view_templates(request, obj=obj)
+    #     )
+
+    # def publisher_request_deletion_view_templates(self):
+    #     return [
+    #         'admin/djangocms_publisher/delete_request_confirmation.html',
+    #     ]
 
     def publisher_get_status_field_context(self, obj):
         return {

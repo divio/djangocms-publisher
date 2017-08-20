@@ -187,7 +187,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             },
         )
     publisher_translation_states.allow_tags = True
-    publisher_translation_states.short_description = '<strong>EN</strong> DE FR'
+    publisher_translation_states.short_description = 'EN DE FR'
 
     def publisher_state_debug(self, obj):
         return render_to_string(

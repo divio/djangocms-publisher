@@ -47,6 +47,7 @@ def get_fields_to_copy(obj, exclude_fields=None):
             continue
         elif is_placeholder_field(field):
             # Don't copy PlaceholderFields
+            print("NOT COPYING PLACEHOLDER")
             continue
         else:
             # Non-relation fields.

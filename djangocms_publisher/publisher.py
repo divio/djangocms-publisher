@@ -175,6 +175,7 @@ class Publisher(object):
         self.get_publisher(draft).copy_relations(old_obj=self.instance)
         return refresh_from_db(draft)
 
+    @transaction.atomic
     def discard_draft(self, update_relations=True):
         draft = self.get_draft_version()
         if not draft:
@@ -193,6 +194,7 @@ class Publisher(object):
             )
         draft.delete()
 
+    @transaction.atomic
     def request_deletion(self):
         draft = self.get_draft_version()
         published = self.get_published_version()
@@ -202,11 +204,13 @@ class Publisher(object):
             self.get_publisher(draft).discard_draft()
         return published
 
+    @transaction.atomic
     def discard_deletion_request(self):
         published = self.get_published_version()
         published.publisher_deletion_requested = False
         published.save(update_fields=['publisher_deletion_requested'])
 
+    @transaction.atomic
     def publish_deletion(self):
         assert self.has_pending_deletion_request
         self.instance.delete()
@@ -234,6 +238,7 @@ class Publisher(object):
         )
 
     def update_relations_exclude(self, old_obj):
+        # FIXME: exclude placeholders
         return self.instance.publisher_update_relations_exclude(old_obj=old_obj)
 
     def can_publish(self):
