@@ -7,6 +7,7 @@ from copy import copy
 from cms.utils.urlutils import static_with_version
 from django.conf.urls import url
 from django.contrib.admin.utils import unquote
+from django.core.exceptions import PermissionDenied
 from django.forms.widgets import Media
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, Http404, QueryDict
@@ -65,6 +66,9 @@ class AdminUrls(object):
     def discard_deletion_request(self,  **kwargs):
         return self.get_action_url(action='discard_deletion_request', **kwargs)
 
+    def delete(self, **kwargs):
+        return self.get_url('delete', **kwargs)
+
 
 class PublisherAdminMixinBase(object):
     @property
@@ -115,20 +119,13 @@ class PublisherAdminMixinBase(object):
         return True
 
     def has_delete_permission(self, request, obj=None):
-        # if PARLER_IS_INSTALLED:
-        #     # Parler checks with this method for the translation specific delete
-        #     # view as well.
-        #     # We can't add the publisher related methods to the parler
-        #     # translation model. So we short-circuit to use the permissions of
-        #     # the shared model instead.
-        #     from parler.models import TranslatedFieldsModel
-        #     if isinstance(obj, TranslatedFieldsModel):
-        #         obj = obj.master
-        #         # FIXME: make this work
-        #         return True
         if obj and obj.pk and obj.publisher.is_published_version:
             if (
-                obj.publisher.has_pending_deletion_request and
+                (
+                    obj.publisher.has_pending_deletion_request or
+                    obj.translations.count() == 1 and
+                    obj.translations.filter(publisher_translation_deletion_requested=True).exists()
+                ) and
                 self.has_publish_permission(request, obj)
             ):
                 return True
@@ -233,6 +230,8 @@ class PublisherAdminMixinBase(object):
                     btn['url'] = action_urls.discard_deletion_request(get=request.GET)
                 elif action_name == 'discard_draft':
                     btn['url'] = action_urls.discard_draft(get=request.GET)
+                elif action_name == 'create_draft':
+                    btn['url'] = action_urls.create_draft(get=request.GET)
                 else:
                     # Default is to use the action together with saving
                     btn['field_name'] = '_{}'.format(action_name)
@@ -310,35 +309,11 @@ class PublisherAdminMixinBase(object):
         Used to handle the publisher workflow actions on response_change and
         change_view.
         """
-        # FIXME: check permissions (edit)
-        if request.POST and '_create_draft' in request.POST:
-            if obj.publisher.is_published_version and obj.publisher.has_pending_changes:
-                # There already is a draft. Just redirect to it.
-                return HttpResponseRedirect(
-                    self.publisher_get_detail_admin_url(
-                        obj.publisher.get_draft_version(),
-                        get=request.GET,
-                    )
-                )
-            draft = obj.publisher.create_draft()
-            return HttpResponseRedirect(self.publisher_get_detail_admin_url(draft))
-        # elif request.POST and '_discard_draft' in request.POST:
-        #     published = obj.publisher.get_published_version()
-        #     obj.publisher.discard_draft()
-        #     return HttpResponseRedirect(self.publisher_get_detail_or_changelist_url(published, get=request.GET))
-        elif request.POST and '_publish' in request.POST:
-            # FIXME: check the user_can_publish() permission
+        if request.POST and '_publish' in request.POST:
+            if not self.has_publish_permission(request, obj):
+                raise PermissionDenied
             published = obj.publisher.publish()
             return HttpResponseRedirect(self.publisher_get_detail_admin_url(published, get=request.GET))
-        # elif request.POST and '_request_deletion' in request.POST:
-        #     published = obj.publisher.request_deletion()
-        #     return HttpResponseRedirect(self.publisher_get_detail_admin_url(published, get=request.GET))
-        # elif request.POST and '_discard_requested_deletion' in request.POST:
-        #     obj.publisher.discard_deletion_request()
-        #     return HttpResponseRedirect(self.publisher_get_detail_admin_url(obj, get=request.GET))
-        elif request.POST and '_publish_deletion' in request.POST:
-            obj.publisher.publish_deletion()
-            return HttpResponseRedirect(self.publisher_get_admin_changelist_url(obj, get=request.GET))
         return None
 
     def publisher_get_action_urlpattern(self, view):
@@ -367,31 +342,6 @@ class PublisherAdminMixinBase(object):
     def get_urls(self):
         urlpatterns = super(PublisherAdminMixinBase, self).get_urls()
         return self.publisher_get_urls() + urlpatterns
-
-    # def publisher_request_deletion_view(self, request, object_id):
-    #     """
-    #     Confirmation to request deletion and action to do it.
-    #     """
-    #     # FIXME: check permissions
-    #     obj = self.get_object(request, unquote(object_id))
-    #     if obj is None:
-    #         raise Http404
-    #     # FIXME: if this is a draft and there is no published obj, redirect to
-    #     #        the delete view.
-    #     if request.POST:
-    #         obj.publisher.request_deletion()
-    #         return HttpResponseRedirect(
-    #             self.publisher_get_detail_admin_url(obj, get=request.GET),
-    #         )
-    #     return render(
-    #         request,
-    #         self.publisher_request_deletion_view_templates(request, obj=obj)
-    #     )
-
-    # def publisher_request_deletion_view_templates(self):
-    #     return [
-    #         'admin/djangocms_publisher/delete_request_confirmation.html',
-    #     ]
 
     def publisher_get_status_field_context(self, obj):
         return {
@@ -428,6 +378,7 @@ def get_all_button_defaults():
     }
     defaults['delete'] = {
         'deletelink': True,  # Special case in template
+        'label': _('Delete'),
     }
     defaults['save_and_continue'] = {
         'label': _('Save and continue editing'),

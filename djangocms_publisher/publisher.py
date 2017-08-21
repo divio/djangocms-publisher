@@ -282,13 +282,16 @@ class Publisher(object):
             actions['discard_draft'] = {}
         if self.is_published_version and not self.has_pending_changes:
             actions['create_draft'] = {}
-        if self.is_draft_version and not self.has_pending_deletion_request:
+        if (
+            self.is_draft_version and
+            not self.has_pending_deletion_request and
+            self.has_published_version
+        ):
             actions['request_deletion'] = {}
         for action_name, data in actions.items():
             data['name'] = action_name
             if action_name in ('publish', 'publish_deletion'):
-                # FIXME: do actual permission check
-                data['has_permission'] = user.is_superuser
+                data['has_permission'] = self.user_can_publish(user)
             else:
                 data['has_permission'] = True
         return actions

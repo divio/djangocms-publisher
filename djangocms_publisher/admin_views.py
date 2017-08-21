@@ -44,7 +44,7 @@ class AdminViewMixin(object):
         })
         return context
 
-    def get_success_url(self, obj):
+    def get_success_url(self, obj, edit=True):
         redirect = self.request.POST.get(
             'redirect',
             self.request.GET.get('redirect', 'admin')
@@ -54,9 +54,17 @@ class AdminViewMixin(object):
             # contrib.parler.
             language = self.request.GET.get('language', None)
             try:
-                return obj.get_absolute_url(language=language)
+                url = obj.get_absolute_url(language=language)
             except TypeError:
-                return obj.get_absolute_url()
+                url = obj.get_absolute_url()
+            get = self.request.GET.copy()
+            if edit:
+                get['edit_on'] = 1
+                get.pop('edit_off', None)
+            else:
+                get['edit_off'] = 1
+                get.pop('edit_on', None)
+            return '{}?{}'.format(url, get.urlencode())
         return obj.publisher.admin_urls.change(get=self.request.GET)
 
 
@@ -97,7 +105,9 @@ class RequestDeletion(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
         published_obj = obj.publisher.request_deletion()
-        return HttpResponseRedirect(self.get_success_url(published_obj))
+        return HttpResponseRedirect(
+            self.get_success_url(published_obj, edit=False)
+        )
 
 
 class DiscardDeletionRequest(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
@@ -120,7 +130,7 @@ class DiscardDeletionRequest(AdminViewMixin, AdminConfirmationViewMixin, DetailV
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
         obj.publisher.discard_deletion_request()
-        return HttpResponseRedirect(self.get_success_url(obj))
+        return HttpResponseRedirect(self.get_success_url(obj, edit=False))
 
 
 class CreateDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
@@ -143,7 +153,7 @@ class CreateDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
         draft_obj = obj.publisher.create_draft()
-        return HttpResponseRedirect(self.get_success_url(draft_obj))
+        return HttpResponseRedirect(self.get_success_url(draft_obj, edit=True))
 
 
 class DiscardDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
@@ -167,7 +177,7 @@ class DiscardDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
         obj = self.get_object()
         published_obj = obj.publisher.get_published_version()
         obj.publisher.discard_draft()
-        return HttpResponseRedirect(self.get_success_url(published_obj))
+        return HttpResponseRedirect(self.get_success_url(published_obj, edit=False))
 
 
 class Publish(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
@@ -190,4 +200,4 @@ class Publish(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
         published_obj = obj.publisher.publish()
-        return HttpResponseRedirect(self.get_success_url(published_obj))
+        return HttpResponseRedirect(self.get_success_url(published_obj, edit=False))

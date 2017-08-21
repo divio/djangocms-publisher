@@ -31,22 +31,29 @@ class ParlerPublisher(Publisher):
 
     def get_draft_version(self):
         obj = super(ParlerPublisher, self).get_draft_version()
-        if obj and not obj.language_code:
-            obj.set_current_language(self.instance.language_code)
-        return obj
+        if obj:
+            try:
+                obj.set_current_language(self.instance.language_code)
+                return obj
+            except ObjectDoesNotExist:
+                pass
+        return None
 
     def get_published_version(self):
         obj = super(ParlerPublisher, self).get_published_version()
-        if obj and not obj.language_code:
-            obj.set_current_language(self.instance.language_code)
-        return obj
+        if obj:
+            try:
+                obj.set_current_language(self.instance.language_code)
+                return obj
+            except ObjectDoesNotExist:
+                pass
+        return None
 
     @property
     def language_code(self):
         return self.instance.language_code
 
     def get_translation(self):
-        # import ipdb;ipdb.set_trace()
         return self.instance.get_translation(self.language_code)
 
     @property

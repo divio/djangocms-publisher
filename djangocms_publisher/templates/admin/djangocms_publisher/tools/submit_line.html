@@ -2,10 +2,12 @@
 <div class="submit-row">
 
 {% for button in draft_workflow_buttons.values %}
-    {% if button.deletelink %}
+    {% if button.deletelink and button.url %}
+        <p class="deletelink-box"><a href="{% add_preserved_filters button.url %}" class="deletelink">{{ button.label }}</a></p>
+    {% elif button.deletelink %}
         {# special case for the deletelink because it has special markup #}
         {% url opts|admin_urlname:'delete' original.pk|admin_urlquote as delete_url %}
-        <p class="deletelink-box"><a href="{% add_preserved_filters delete_url %}" class="deletelink">{% trans "Delete" %}</a></p>
+        <p class="deletelink-box"><a href="{% add_preserved_filters delete_url %}" class="deletelink">{{ button.label }}</a></p>
     {% elif button.url %}
         <a href="{{ button.url }}" class="btn">{{ button.label }}</a>
     {% elif button.deletelink_button %}

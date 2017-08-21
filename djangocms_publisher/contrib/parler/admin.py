@@ -33,14 +33,19 @@ class ParlerAdminUrls(AdminUrls):
             args=[self.instance.pk, self.instance.language_code],
         )
 
+    def delete_translation(self, **kwargs):
+        return super(ParlerAdminUrls, self).get_url(
+            name='delete_translation',
+            args=[self.instance.pk, self.instance.language_code],
+        )
 
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
-    delete_confirmation_template = 'admin/djangocms_publisher/contrib/parler/translation_delete_request_confirmation.html'
+    # delete_confirmation_template = 'admin/djangocms_publisher/contrib/parler/translation_delete_request_confirmation.html'
 
     def publisher_get_urls(self):
         urls = super(PublisherParlerAdminMixin, self).publisher_get_urls()
         return [
-            self.publisher_get_action_urlpattern_with_language(admin_views.CreateDraft)
+            self.publisher_get_action_urlpattern_with_language(admin_views.CreateDraft),
         ] + urls
 
     def publisher_get_action_urlpattern_with_language(self, view):
@@ -72,8 +77,6 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         )
 
     def publisher_get_buttons(self, request, obj):
-        # HACK to keep the current language when navigating between draft and
-        # published.
         buttons = (
             super(PublisherParlerAdminMixin, self)
             .publisher_get_buttons(request, obj)
@@ -81,30 +84,14 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         language_code = request.GET.get('language_code')
         if not language_code:
             language_code = getattr(obj, 'language_code', None)
-        if not language_code:
-            return buttons
-
-        for name, button in buttons.items():
-            # Add the language to the button labels for clarity
-            if name in (
-                    'publish',
-                    'show_live',
-                    'create_draft',
-                    'discard_draft',
-                    'edit',
-                    'edit_draft',
-            ):
-                label = button.get('label')
-                if label:
-                    button['label'] = '{} ({})'.format(
-                        label,
-                        language_code.upper(),
-                    )
-            # Add the language to the url, so we don't loose that context
-            # url = button.get('url', None)
-            # if not url or '?language=' in url:
-            #     continue
-            # button['url'] = url + '?language={}'.format(language_code)
+        if 'delete' in buttons and obj.publisher.is_published_version:
+            btn = buttons.get('delete')
+            if obj.translations.all().count() > 1:
+                btn['url'] = obj.publisher.admin_urls.delete_translation()
+                btn['label'] = '{} ({})'.format(
+                    btn['label'],
+                    language_code.upper(),
+                )
         return buttons
 
     def delete_translation(self, request, object_id, language_code):
@@ -134,32 +121,9 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
                 super(PublisherParlerAdminMixin, self)
                 .delete_translation(request, object_id, language_code)
             )
-        # This means it is a draft or published object that we can request
-        # deletion for.
-        if not self.has_change_permission(request, translation.master):
-            raise PermissionDenied
-        if request.method == 'POST':
-            published_translation = translation.publisher.request_deletion()
-            return HttpResponseRedirect(
-                self.publisher_get_detail_admin_url(published_translation)
-            )
-        opts = self.model._meta
-        object_name = _('{0} Translation').format(
-            force_text(opts.verbose_name),
-        )
-        context = {
-            "title": _("Are you sure?"),
-            "object_name": object_name,
-            "object": translation,
-            "opts": opts,
-            "app_label": opts.app_label,
-        }
-
-        return render(request, self.delete_confirmation_template or [
-            "admin/%s/%s/parler_delete_request_confirmation.html" % (opts.app_label, opts.object_name.lower()),
-            "admin/%s/parler_delete_request_confirmation.html" % opts.app_label,
-            "admin/parler_delete_request_confirmation.html"
-        ], context)
+        # This means it is a draft or published object that needs a deletion
+        # request before it can be deleted.
+        raise PermissionDenied
 
     def get_readonly_fields(self, request, obj=None):
         readonly_fields = (
