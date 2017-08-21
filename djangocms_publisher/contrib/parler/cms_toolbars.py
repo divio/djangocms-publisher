@@ -4,6 +4,7 @@ from __future__ import unicode_literals
 
 import json
 
+from cms.toolbar_pool import toolbar_pool
 from cms.constants import REFRESH_PAGE
 from cms.toolbar.items import Dropdown, DropdownToggleButton, ModalButton, \
     Button, BaseButton
@@ -53,6 +54,7 @@ class PublisherToolbar(CMSToolbar):
     # TODO: Validate that toolbar is setup correctly (watch_models and supported_apps, ...)
     # watch_models = [Article, ]
     # supported_apps = ('aldryn_newsblog',)
+    publisher_disable_core_draft_live = True
 
     def setup_publisher_toolbar(self, obj):
         draft_version = obj.publisher.get_draft_version()
@@ -66,16 +68,34 @@ class PublisherToolbar(CMSToolbar):
                 # We're in edit mode and there is no draft.
                 # Add a edit button that will create a draft if it does not
                 # exist.
-                self.toolbar.add_button(
-                    name='Edit and create',
-                    url=onsite_url(published_version.get_draft_url()),
-                    side=self.toolbar.RIGHT,
-                    extra_classes=[
-                        'cms-btn-action',
-                    ],
-                )
-        elif published_version and published_version.publisher.has_pending_deletion_request:
-            self.add_publisher_delete_dropdown(published_version)
+                self.add_create_draft_button(published_version)
+        else:
+            if published_version and published_version.publisher.has_pending_deletion_request:
+                self.add_publisher_delete_dropdown(published_version)
+            elif published_version and not draft_version:
+                self.add_create_draft_button(published_version)
+            elif draft_version:
+                self.add_change_draft_button(draft_version)
+
+    def add_create_draft_button(self, obj):
+        self.toolbar.add_button(
+            name='Edit+',
+            url=onsite_url(obj.publisher.admin_urls.create_draft()),
+            side=self.toolbar.RIGHT,
+            extra_classes=[
+                'cms-btn-action',
+            ],
+        )
+
+    def add_change_draft_button(self, obj):
+        self.toolbar.add_button(
+            name='Edit',
+            url=onsite_url(obj.get_draft_url(language=obj.language_code) + '?edit'),
+            side=self.toolbar.RIGHT,
+            extra_classes=[
+                'cms-btn-action',
+            ],
+        )
 
     def add_publisher_publish_dropdown(self, obj):
         container = Dropdown(
@@ -96,7 +116,7 @@ class PublisherToolbar(CMSToolbar):
         container.buttons.append(
             Button(
                 name=_('View published'),
-                url=obj.get_absolute_url() + '?edit_off',
+                url=obj.get_public_url(language=obj.language_code) + '?edit_off',
             )
         )
         container.buttons.append(
@@ -137,3 +157,26 @@ class PublisherToolbar(CMSToolbar):
             ),
         )
         self.toolbar.add_item(container)
+
+
+try:
+    PageToolbar = toolbar_pool.toolbars['cms.cms_toolbars.PageToolbar']
+except:
+    from cms.cms_toolbars import PageToolbar
+
+
+class PublisherNoDraftLiveButtonsPageToolbar(PageToolbar):
+    def post_template_populate(self):
+        self.init_placeholders()
+        show_core_draft_live = True
+        for toolbar in self.toolbar.toolbars.values():
+            if toolbar.is_current_app and getattr(toolbar, 'publisher_disable_core_draft_live', False):
+                show_core_draft_live = False
+                break
+        if show_core_draft_live:
+            self.add_draft_live()
+        self.add_publish_button()
+        self.add_structure_mode()
+
+
+toolbar_pool.toolbars['cms.cms_toolbars.PageToolbar'] = PublisherNoDraftLiveButtonsPageToolbar

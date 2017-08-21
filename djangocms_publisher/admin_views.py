@@ -11,7 +11,6 @@ from django.utils.translation import ugettext_lazy as _
 
 
 class AdminViewMixin(object):
-    # FIXME: permission checks
     admin = None
     opts = None
 
@@ -25,7 +24,7 @@ class AdminViewMixin(object):
     def get_object(self):
         return self.admin.get_object(self.request, self.kwargs['pk'])
 
-    def has_permission(self):
+    def has_change_permission(self):
         return self.request.user.has_perm(
             '{}.{}'.format(
                 self.opts.app_label,
@@ -40,7 +39,7 @@ class AdminViewMixin(object):
             'title': 'Process: ' + force_text(self.get_object()),
             'opts': self.opts,
             'app_label': self.opts.app_label,
-            'has_change_permission': self.has_permission(),
+            'has_change_permission': self.has_change_permission(),
         })
         return context
 
@@ -58,12 +57,13 @@ class AdminViewMixin(object):
             except TypeError:
                 url = obj.get_absolute_url()
             get = self.request.GET.copy()
-            if edit:
-                get['edit_on'] = 1
-                get.pop('edit_off', None)
-            else:
-                get['edit_off'] = 1
-                get.pop('edit_on', None)
+            self.request.session['cms_edit'] = edit
+            # if edit:
+            #     get['edit_on'] = 1
+            #     get.pop('edit_off', None)
+            # else:
+            #     get['edit_off'] = 1
+            #     get.pop('edit_on', None)
             return '{}?{}'.format(url, get.urlencode())
         return obj.publisher.admin_urls.change(get=self.request.GET)
 
@@ -104,6 +104,8 @@ class RequestDeletion(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
 
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
+        if not obj.publisher.user_can_change(self.request.user):
+            raise PermissionDenied
         published_obj = obj.publisher.request_deletion()
         return HttpResponseRedirect(
             self.get_success_url(published_obj, edit=False)
@@ -199,5 +201,7 @@ class Publish(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
 
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
+        if not self.admin.has_publish_permission(request, obj):
+            raise PermissionDenied
         published_obj = obj.publisher.publish()
         return HttpResponseRedirect(self.get_success_url(published_obj, edit=False))

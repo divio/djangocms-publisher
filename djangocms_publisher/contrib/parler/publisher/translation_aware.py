@@ -123,11 +123,11 @@ class ParlerPublisher(Publisher):
     def discard_draft(self, update_relations=True):
         try:
             translation = self.get_translation()
-            translation.discard_draft()
+            translation.publisher.discard_draft()
         except ObjectDoesNotExist:
             pass
         if not self.instance.translations.all().exists():
-            self.instance.master_publisher.disard_draft()
+            self.instance.master_publisher.discard_draft()
 
     def copy_relations(self, old_obj):
         # Call a method on the master object so any app specific relations can

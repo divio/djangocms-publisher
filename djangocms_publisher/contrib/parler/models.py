@@ -64,7 +64,7 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
         draft_version = self.publisher.get_draft_version()
         if draft_version:
             return draft_version.get_absolute_url(language=language)
-
+        return ''
         # There is no draft of this url yet. get_object_draft_url will end up
         # as the url in the button in the toolbar to "edit". If a user clicks
         # on that we want to explicitly create a draft version if there is none

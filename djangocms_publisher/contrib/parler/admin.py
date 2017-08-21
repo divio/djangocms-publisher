@@ -21,17 +21,17 @@ class ParlerAdminUrls(AdminUrls):
         get['language'] = self.instance.language_code
         return super(ParlerAdminUrls, self).get_url(name=name, get=get)
 
-    def create_draft(self, **kwargs):
-        # Because django-cms toolbar does stupid things by just adding ?edit
-        # onto the url instead of checking if the url already has get params
-        # and use &edit instead, we're forced to put the language into the
-        # url instead of a get param for this view.
-        # Intentionally skipping get_url from self, because we don't want the
-        # language code as get param in this case.
-        return super(ParlerAdminUrls, self).get_url(
-            name='publisher_create_draft',
-            args=[self.instance.pk, self.instance.language_code],
-        )
+    # def create_draft(self, **kwargs):
+    #     # Because django-cms toolbar just adds ?edit
+    #     # onto the url instead of checking if the url already has get params
+    #     # and use &edit instead, we're forced to put the language into the
+    #     # url instead of a get param for this view.
+    #     # Intentionally skipping get_url from self, because we don't want the
+    #     # language code as get param in this case.
+    #     return super(ParlerAdminUrls, self).get_url(
+    #         name='publisher_create_draft',
+    #         args=[self.instance.pk, self.instance.language_code],
+    #     )
 
     def delete_translation(self, **kwargs):
         return super(ParlerAdminUrls, self).get_url(
@@ -43,25 +43,25 @@ class ParlerAdminUrls(AdminUrls):
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
     # delete_confirmation_template = 'admin/djangocms_publisher/contrib/parler/translation_delete_request_confirmation.html'
 
-    def publisher_get_urls(self):
-        urls = super(PublisherParlerAdminMixin, self).publisher_get_urls()
-        return [
-            self.publisher_get_action_urlpattern_with_language(admin_views.CreateDraft),
-        ] + urls
-
-    def publisher_get_action_urlpattern_with_language(self, view):
-        opts = self.model._meta
-        url_segment = view.action_name.replace('_', '-')
-        url_name = '{0}_{1}_publisher_{2}'.format(
-            opts.app_label,
-            opts.model_name,
-            view.action_name,
-        )
-        return url(
-            r'^(?P<pk>.+)/' + url_segment + r'/(?P<language>[a-zA-Z_-]*)/$',
-            self.admin_site.admin_view(view.as_view(admin=self)),
-            name=url_name,
-        )
+    # def publisher_get_urls(self):
+    #     urls = super(PublisherParlerAdminMixin, self).publisher_get_urls()
+    #     return [
+    #         self.publisher_get_action_urlpattern_with_language(admin_views.CreateDraft),
+    #     ] + urls
+    #
+    # def publisher_get_action_urlpattern_with_language(self, view):
+    #     opts = self.model._meta
+    #     url_segment = view.action_name.replace('_', '-')
+    #     url_name = '{0}_{1}_publisher_{2}'.format(
+    #         opts.app_label,
+    #         opts.model_name,
+    #         view.action_name,
+    #     )
+    #     return url(
+    #         r'^(?P<pk>.+)/' + url_segment + r'/(?P<language>[a-zA-Z_-]*)/$',
+    #         self.admin_site.admin_view(view.as_view(admin=self)),
+    #         name=url_name,
+    #     )
 
     def has_delete_permission(self, request, obj=None):
         if obj and obj.pk and obj.publisher.is_published_version:
