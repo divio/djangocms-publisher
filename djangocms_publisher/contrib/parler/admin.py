@@ -39,6 +39,7 @@ class ParlerAdminUrls(AdminUrls):
             args=[self.instance.pk, self.instance.language_code],
         )
 
+
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
     # delete_confirmation_template = 'admin/djangocms_publisher/contrib/parler/translation_delete_request_confirmation.html'
 
@@ -60,6 +61,25 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             r'^(?P<pk>.+)/' + url_segment + r'/(?P<language>[a-zA-Z_-]*)/$',
             self.admin_site.admin_view(view.as_view(admin=self)),
             name=url_name,
+        )
+
+    def has_delete_permission(self, request, obj=None):
+        if obj and obj.pk and obj.publisher.is_published_version:
+            if (
+                (
+                    obj.publisher.has_pending_deletion_request or
+                    obj.translations.count() == 1 and
+                    obj.translations.filter(publisher_translation_deletion_requested=True).exists()
+                ) and
+                self.has_publish_permission(request, obj)
+            ):
+                return True
+            return False
+        elif obj and obj.pk and obj.publisher.is_draft_version and obj.publisher.has_published_version:
+            return False
+        return (
+            super(PublisherParlerAdminMixin, self)
+            .has_delete_permission(request, obj)
         )
 
     @property
@@ -84,7 +104,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         language_code = request.GET.get('language_code')
         if not language_code:
             language_code = getattr(obj, 'language_code', None)
-        if 'delete' in buttons and obj.publisher.is_published_version:
+        if 'delete' in buttons and obj and obj.publisher.is_published_version:
             btn = buttons.get('delete')
             if obj.translations.all().count() > 1:
                 btn['url'] = obj.publisher.admin_urls.delete_translation()

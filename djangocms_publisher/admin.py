@@ -121,11 +121,7 @@ class PublisherAdminMixinBase(object):
     def has_delete_permission(self, request, obj=None):
         if obj and obj.pk and obj.publisher.is_published_version:
             if (
-                (
-                    obj.publisher.has_pending_deletion_request or
-                    obj.translations.count() == 1 and
-                    obj.translations.filter(publisher_translation_deletion_requested=True).exists()
-                ) and
+                obj.publisher.has_pending_deletion_request and
                 self.has_publish_permission(request, obj)
             ):
                 return True
