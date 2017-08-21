@@ -66,8 +66,6 @@ def get_language_tabs(request, obj, current_language, available_languages, css_c
     else:
         is_draft_version = True
         all_translations = {}
-    from pprint import pprint as pp
-    pp(all_translations)
     all_language_codes = [code for code, name in settings.LANGUAGES]
     for code in all_language_codes:
         title = get_language_title(code)
@@ -75,7 +73,6 @@ def get_language_tabs(request, obj, current_language, available_languages, css_c
         get['language'] = code
         translation = all_translations.get(code)
         if translation:
-            print translation.language_code, translation.master_id
             url = get_admin_change_url_for_translation(translation, get)
             publisher_state = translation.publisher.state
         else:

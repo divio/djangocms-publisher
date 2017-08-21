@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, unicode_literals
+from __future__ import unicode_literals
 
-from django.db import models, transaction
+from django.db import models
 from django.db.models import Q
 from django.utils.functional import cached_property
-from django.utils.translation import ugettext_lazy as _
 
-from .publisher import Publisher, PUBLISHER_STATE_CHOICES
+from .publisher import Publisher
 
 
 class PublisherQuerySetMixin(object):

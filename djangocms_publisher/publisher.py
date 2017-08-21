@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, unicode_literals
+from __future__ import unicode_literals
 
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.urlresolvers import reverse
-from django.db import models, transaction
-from django.db.models import Q
-from django.http import QueryDict
+from django.db import transaction
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _

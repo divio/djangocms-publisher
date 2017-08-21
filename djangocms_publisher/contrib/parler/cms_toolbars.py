@@ -8,10 +8,11 @@ from django.conf import settings
 
 from cms.cms_toolbars import LANGUAGE_MENU_IDENTIFIER
 from cms.toolbar_pool import toolbar_pool
-from cms.constants import REFRESH_PAGE
-from cms.toolbar.items import Dropdown, Button, BaseButton
+from cms.constants import FOLLOW_REDIRECT
+from cms.toolbar.items import Dropdown, Button, BaseButton, ModalButton
 
 from cms.utils import get_cms_setting
+from django.http import QueryDict
 
 from django.utils.translation import ugettext as _
 
@@ -28,7 +29,7 @@ class AjaxButton(BaseButton):
         self.active = active
         self.disabled = disabled
         self.data = data
-        self.on_success = REFRESH_PAGE
+        self.on_success = FOLLOW_REDIRECT
         self.extra_classes = extra_classes or []
 
     def get_context(self):
@@ -70,6 +71,19 @@ class LanguageButton(Button):
         return context
 
 
+class LanguageModalButton(ModalButton):
+    template = 'admin/djangocms_publisher/toolbar/language_button_modal.html'
+
+    def __init__(self, *args, **kwargs):
+        self.state = kwargs.pop('state')
+        super(LanguageModalButton, self).__init__(*args, **kwargs)
+
+    def get_context(self):
+        context = super(LanguageModalButton, self).get_context()
+        context['state'] = self.state
+        return context
+
+
 def onsite_url(url):
     if '?' in url:
         splitter = '&'
@@ -80,10 +94,11 @@ def onsite_url(url):
 
 class PublisherToolbar(CMSToolbar):
     publisher_disable_core_draft_live = True
+    publisher_disable_languages_menu = True
 
-    def populate(self):
-        super(PublisherToolbar, self).populate()
-        self.remove_unwanted_menus()
+    # def populate(self):
+    #     super(PublisherToolbar, self).populate()
+    #     self.remove_unwanted_menus()
 
     def setup_publisher_toolbar(self, obj):
         draft_version = obj.publisher.get_draft_version()
@@ -103,33 +118,43 @@ class PublisherToolbar(CMSToolbar):
             self.add_edit_button(obj)
 
     def get_language_buttons(self, obj):
+        all_states = obj.publisher.translation_states_dict()
         buttons = []
         all_languages = dict(settings.LANGUAGES)
-        for translation in obj.publisher.all_translations(prefer_drafts=True):
-            draft_translation = translation.publisher.get_draft_version()
-            if draft_translation:
-                btn = LanguageButton(
-                    name=all_languages.get(translation.language_code),
-                    url=onsite_url(
-                        '{}?{}'.format(
-                            obj.get_draft_url(language=obj.language_code),
-                            get_cms_setting('CMS_TOOLBAR_URL__EDIT_ON'),
-                        )
-                    ),
-                    state=draft_translation.publisher.state,
-                )
+        all_translations_dict = obj.publisher.all_translations_dict(prefer_drafts=True)
+        for code, state in all_states.items():
+            translation = all_translations_dict.get(code)
+            if translation:
+                draft_translation = translation.publisher.get_draft_version()
+                if draft_translation:
+                    btn = LanguageButton(
+                        name=all_languages.get(translation.language_code),
+                        url=onsite_url(
+                            '{}?{}'.format(
+                                obj.get_draft_url(language=obj.language_code),
+                                get_cms_setting('CMS_TOOLBAR_URL__EDIT_ON'),
+                            )
+                        ),
+                        state=state,
+                    )
+                else:
+                    published = translation.publisher.aware_master
+                    btn = LanguageAjaxButton(
+                        name=all_languages.get(translation.language_code),
+                        action=onsite_url(published.publisher.admin_urls.create_draft()),
+                        data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
+                        state=translation.publisher.state,
+                    )
+                    # btn = LanguageButton(
+                    #     name=all_languages.get(translation.language_code),
+                    #     url=onsite_url(published.publisher.admin_urls.create_draft()),
+                    #     state=published.publisher.state,
+                    # )
             else:
-                published = translation.publisher.aware_master
-                # btn = LanguageAjaxButton(
-                #     name=all_languages.get(translation.language_code),
-                #     action=onsite_url(published.publisher.admin_urls.create_draft()),
-                #     data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
-                #     state=translation.publisher.state,
-                # )
-                btn = LanguageButton(
-                    name=all_languages.get(translation.language_code),
-                    url=onsite_url(published.publisher.admin_urls.create_draft()),
-                    state=published.publisher.state,
+                btn = LanguageModalButton(
+                    name=all_languages[code],
+                    url=obj.publisher.admin_urls.change(language=code),
+                    state=state,
                 )
 
             buttons.append(btn)
@@ -152,9 +177,10 @@ class PublisherToolbar(CMSToolbar):
         self.toolbar.add_item(container)
 
     def get_create_draft_button(self, obj):
-        return Button(
+        return AjaxButton(
             name='Edit',
-            url=onsite_url(obj.publisher.admin_urls.create_draft()),
+            action=onsite_url(obj.publisher.admin_urls.create_draft()),
+            data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
             extra_classes=[
                 'cms-btn-action',
             ],
@@ -182,21 +208,21 @@ class PublisherToolbar(CMSToolbar):
             ],
         )
         container.add_primary_button(
-            Button(
-                name=_('Publish'),
-                url=onsite_url(obj.publisher.admin_urls.publish()),
-                extra_classes=[
-                    'cms-btn-action',
-                ],
-            )
-            # AjaxButton(
+            # Button(
             #     name=_('Publish'),
-            #     action=onsite_url(obj.publisher.admin_urls.publish()),
-            #     data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
+            #     url=onsite_url(obj.publisher.admin_urls.publish()),
             #     extra_classes=[
             #         'cms-btn-action',
             #     ],
             # )
+            AjaxButton(
+                name=_('Publish'),
+                action=onsite_url(obj.publisher.admin_urls.publish()),
+                data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
+                extra_classes=[
+                    'cms-btn-action',
+                ],
+            )
         )
         container.buttons.append(
             Button(
@@ -245,10 +271,10 @@ class PublisherToolbar(CMSToolbar):
             ),
         )
         self.toolbar.add_item(container)
-
-    def remove_unwanted_menus(self):
-        # print self.toolbar.menus.pop(LANGUAGE_MENU_IDENTIFIER, None)
-        self.toolbar.menus[LANGUAGE_MENU_IDENTIFIER] = ''
+    #
+    # def remove_unwanted_menus(self):
+    #     # print self.toolbar.menus.pop(LANGUAGE_MENU_IDENTIFIER, None)
+    #     import ipdb; ipdb.set_trace()
 
 
 try:
@@ -270,5 +296,22 @@ class PublisherNoDraftLiveButtonsPageToolbar(PageToolbar):
         self.add_publish_button()
         self.add_structure_mode()
 
+    def add_language_menu(self):
+        show_languages = True
+        for toolbar in self.toolbar.toolbars.values():
+            if toolbar.is_current_app and getattr(toolbar, 'publisher_disable_languages_menu', False):
+                show_languages = False
+                break
+        if show_languages:
+            super(PublisherNoDraftLiveButtonsPageToolbar, self).add_language_menu()
+
+    def change_language_menu(self):
+        show_languages = True
+        for toolbar in self.toolbar.toolbars.values():
+            if toolbar.is_current_app and getattr(toolbar, 'publisher_disable_languages_menu', False):
+                show_languages = False
+                break
+        if show_languages:
+            super(PublisherNoDraftLiveButtonsPageToolbar, self).change_language_menu()
 
 toolbar_pool.toolbars['cms.cms_toolbars.PageToolbar'] = PublisherNoDraftLiveButtonsPageToolbar

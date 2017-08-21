@@ -10,11 +10,14 @@ from . import utils
 
 
 class ParlerAdminUrls(AdminUrls):
-    def get_url(self, name, get=None, args=None):
+    def get_url(self, name, get=None, args=None, language=None):
         if get is None:
             get = QueryDict()
         get = get.copy()
-        get['language'] = self.instance.language_code
+        if language is not None:
+            get['language'] = language
+        else:
+            get['language'] = self.instance.language_code
         return super(ParlerAdminUrls, self).get_url(name=name, get=get)
 
     def delete_translation(self, **kwargs):

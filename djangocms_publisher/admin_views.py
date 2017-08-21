@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 
 from django.contrib.auth import get_permission_codename
 from django.core.exceptions import PermissionDenied
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
 from django.utils.encoding import force_text
 from django.utils.html import escape
 from django.views.generic import View, DetailView
@@ -58,14 +58,14 @@ class AdminViewMixin(object):
                 url = obj.get_absolute_url()
             get = self.request.GET.copy()
             self.request.session['cms_edit'] = edit
-            # if edit:
-            #     get['edit_on'] = 1
-            #     get.pop('edit_off', None)
-            # else:
-            #     get['edit_off'] = 1
-            #     get.pop('edit_on', None)
             return '{}?{}'.format(url, get.urlencode())
         return obj.publisher.admin_urls.change(get=self.request.GET)
+
+    def response_redirect(self, url):
+        if self.request.is_ajax():
+            return JsonResponse(data={'url': url})
+        else:
+            return HttpResponseRedirect(url)
 
 
 class AdminConfirmationViewMixin(object):
@@ -107,7 +107,7 @@ class RequestDeletion(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
         published_obj = obj.publisher.request_deletion()
-        return HttpResponseRedirect(
+        return self.response_redirect(
             self.get_success_url(published_obj, edit=False)
         )
 
@@ -133,7 +133,7 @@ class DiscardDeletionRequest(AdminViewMixin, AdminConfirmationViewMixin, DetailV
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
         obj.publisher.discard_deletion_request()
-        return HttpResponseRedirect(self.get_success_url(obj, edit=False))
+        return self.response_redirect(self.get_success_url(obj, edit=False))
 
 
 class CreateDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
@@ -156,7 +156,9 @@ class CreateDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
         draft_obj = obj.publisher.create_draft()
-        return HttpResponseRedirect(self.get_success_url(draft_obj, edit=True))
+        return self.response_redirect(
+            self.get_success_url(draft_obj, edit=True)
+        )
 
 
 class DiscardDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
@@ -180,7 +182,9 @@ class DiscardDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
         obj = self.get_object()
         published_obj = obj.publisher.get_published_version()
         obj.publisher.discard_draft()
-        return HttpResponseRedirect(self.get_success_url(published_obj, edit=False))
+        return self.response_redirect(
+            self.get_success_url(published_obj, edit=False)
+        )
 
 
 class Publish(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
@@ -205,4 +209,6 @@ class Publish(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
         if not self.admin.has_publish_permission(request, obj):
             raise PermissionDenied
         published_obj = obj.publisher.publish()
-        return HttpResponseRedirect(self.get_success_url(published_obj, edit=False))
+        return self.response_redirect(
+            self.get_success_url(published_obj, edit=False)
+        )

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import print_function, unicode_literals
+from __future__ import unicode_literals
 
 from django.db import transaction
 from django.utils import timezone
@@ -8,7 +8,8 @@ from django.utils.functional import cached_property
 from ....utils.copying import (
     get_fields_to_copy,
     refresh_from_db)
-from ....models import PUBLISHER_STATE_CHOICES, Publisher
+from ....models import Publisher
+from ....publisher import PUBLISHER_STATE_CHOICES
 
 
 class ParlerTranslationPublisher(Publisher):
