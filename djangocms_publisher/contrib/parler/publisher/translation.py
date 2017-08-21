@@ -1,15 +1,14 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
 
-from django.db import models, transaction
+from django.db import transaction
 from django.utils import timezone
 from django.utils.functional import cached_property
-from django.utils.translation import ugettext_lazy as _
 
 from ....utils.copying import (
     get_fields_to_copy,
     refresh_from_db)
-from ....models import PUBLISHER_STATE_CHOICES, PublisherModelMixin, Publisher
+from ....models import PUBLISHER_STATE_CHOICES, Publisher
 
 
 class ParlerTranslationPublisher(Publisher):
@@ -214,6 +213,9 @@ class ParlerTranslationPublisher(Publisher):
         state_dict['text'] = choices[state_id]
         return state_dict
 
+    def user_can_publish(self, user):
+        return self.instance.master.master_publisher.user_can_publish(user)
+
     def available_actions(self, user):
         actions = {}
         if self.has_pending_deletion_request:
@@ -232,8 +234,7 @@ class ParlerTranslationPublisher(Publisher):
         for action_name, data in actions.items():
             data['name'] = action_name
             if action_name in ('publish', 'publish_deletion'):
-                # FIXME: do actual permission check
-                data['has_permission'] = user.is_superuser
+                data['has_permission'] = self.user_can_publish(user)
             else:
                 data['has_permission'] = True
         return actions

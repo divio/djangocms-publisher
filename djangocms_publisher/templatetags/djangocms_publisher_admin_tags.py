@@ -23,7 +23,6 @@ def djangocms_publisher_submit_row(context):
         # Don't show any of this in popup mode
         buttons.pop('delete', None)
         buttons.pop('save_and_continue', None)
-        # buttons.pop('save', None)
 
     ctx = {
         'opts': opts,

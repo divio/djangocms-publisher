@@ -6,17 +6,16 @@ import json
 
 from django.conf import settings
 
+from cms.cms_toolbars import LANGUAGE_MENU_IDENTIFIER
 from cms.toolbar_pool import toolbar_pool
 from cms.constants import REFRESH_PAGE
-from cms.toolbar.items import Dropdown, DropdownToggleButton, ModalButton, \
-    Button, BaseButton
+from cms.toolbar.items import Dropdown, Button, BaseButton
+
 from cms.utils import get_cms_setting
 
-from django.utils.translation import (
-    ugettext as _, get_language_from_request, override)
+from django.utils.translation import ugettext as _
 
 from cms.toolbar_base import CMSToolbar
-from djangocms_publisher.utils.copying import refresh_from_db
 
 
 class AjaxButton(BaseButton):
@@ -80,10 +79,11 @@ def onsite_url(url):
 
 
 class PublisherToolbar(CMSToolbar):
-    # TODO: Validate that toolbar is setup correctly (watch_models and supported_apps, ...)
-    # watch_models = [Article, ]
-    # supported_apps = ('aldryn_newsblog',)
     publisher_disable_core_draft_live = True
+
+    def populate(self):
+        super(PublisherToolbar, self).populate()
+        self.remove_unwanted_menus()
 
     def setup_publisher_toolbar(self, obj):
         draft_version = obj.publisher.get_draft_version()
@@ -93,18 +93,9 @@ class PublisherToolbar(CMSToolbar):
                 # We're in edit mode. There is a draft article. Show the
                 # publish button.
                 self.add_publisher_publish_dropdown(draft_version)
-            # elif not published_version.publisher.has_pending_deletion_request:
-            #     # We're in edit mode and there is no draft.
-            #     # Add a edit button that will create a draft if it does not
-            #     # exist.
-            #     self.add_create_draft_button(published_version)
         else:
             if published_version and published_version.publisher.has_pending_deletion_request:
                 self.add_publisher_delete_dropdown(published_version)
-            # elif published_version and not draft_version:
-            #     self.add_create_draft_button(published_version)
-            # elif draft_version:
-            #     self.add_change_draft_button(draft_version)
         if (
             (self.toolbar.edit_mode and not draft_version and not published_version.publisher.has_pending_deletion_request) or
             (not self.toolbar.edit_mode and published_version and not published_version.publisher.has_pending_deletion_request)
@@ -183,31 +174,6 @@ class PublisherToolbar(CMSToolbar):
             ],
         )
 
-    # def add_create_draft_button(self, obj):
-    #     self.toolbar.add_button(
-    #         name='Edit+',
-    #         url=onsite_url(obj.publisher.admin_urls.create_draft()),
-    #         side=self.toolbar.RIGHT,
-    #         extra_classes=[
-    #             'cms-btn-action',
-    #         ],
-    #     )
-    #
-    # def add_change_draft_button(self, obj):
-    #     self.toolbar.add_button(
-    #         name='Edit',
-    #         url=onsite_url(
-    #             '{}?{}'.format(
-    #                 obj.get_draft_url(language=obj.language_code),
-    #                 get_cms_setting('CMS_TOOLBAR_URL__EDIT_ON'),
-    #             )
-    #         ),
-    #         side=self.toolbar.RIGHT,
-    #         extra_classes=[
-    #             'cms-btn-action',
-    #         ],
-    #     )
-
     def add_publisher_publish_dropdown(self, obj):
         container = Dropdown(
             side=self.toolbar.RIGHT,
@@ -279,6 +245,10 @@ class PublisherToolbar(CMSToolbar):
             ),
         )
         self.toolbar.add_item(container)
+
+    def remove_unwanted_menus(self):
+        # print self.toolbar.menus.pop(LANGUAGE_MENU_IDENTIFIER, None)
+        self.toolbar.menus[LANGUAGE_MENU_IDENTIFIER] = ''
 
 
 try:

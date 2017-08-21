@@ -8,9 +8,8 @@ from django.http import QueryDict
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext_lazy as _
 
-from parler import appsettings
 from parler.utils.views import TabsList
-from parler.utils import normalize_language_code, is_multilingual_project, get_language_title
+from parler.utils import get_language_title
 
 
 from django.core.urlresolvers import reverse
@@ -102,23 +101,8 @@ def get_language_tabs(request, obj, current_language, available_languages, css_c
         )
         tab_languages.append(code)
 
-    # # Additional stale translations in the database?
-    # if appsettings.PARLER_SHOW_EXCLUDED_LANGUAGE_TABS:
-    #     for code in available_languages:
-    #         if code not in tab_languages:
-    #             get['language'] = code
-    #             url = '?{0}'.format(get.urlencode())
-    #
-    #             if code == current_language:
-    #                 status = 'current'
-    #             else:
-    #                 status = 'available'
-    #
-    #             tabs.append((url, get_language_title(code), code, status))
-
     tabs.current_is_translated = current_language in all_translations.keys()
-    # FIXME: show correct deletion possibilities based on publisher state
-    # tabs.allow_deletion = len(available_languages) > 1
+    # We have the delete ui in the submit row.
     tabs.allow_deletion = False
     return tabs
 

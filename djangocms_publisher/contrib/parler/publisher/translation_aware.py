@@ -5,15 +5,14 @@ from collections import OrderedDict
 
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
-from django.db import models, transaction
+from django.db import transaction
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
 from ....utils.copying import (
-    get_fields_to_copy,
     refresh_from_db)
-from ....models import PUBLISHER_STATE_CHOICES, PublisherModelMixin, Publisher
+from ....models import Publisher
 
 
 class ParlerPublisher(Publisher):

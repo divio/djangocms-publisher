@@ -80,6 +80,7 @@ class AdminConfirmationViewMixin(object):
             "object": self.get_object(),
             "action_title": None,
             "action_message": _("Are you sure?"),
+            "is_generic_confirmation": True,
         })
         return context
 
@@ -99,6 +100,7 @@ class RequestDeletion(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
                 object_name=context['object_name'],
                 escaped_object=escape(context['object']),
             ),
+            "is_generic_confirmation": False,
         })
         return context
 
@@ -124,6 +126,7 @@ class DiscardDeletionRequest(AdminViewMixin, AdminConfirmationViewMixin, DetailV
                 object_name=context['object_name'],
                 escaped_object=escape(context['object']),
             ),
+            "is_generic_confirmation": False,
         })
         return context
 

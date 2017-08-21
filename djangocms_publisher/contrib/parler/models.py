@@ -1,19 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import print_function, unicode_literals
 
-from collections import OrderedDict
 
 from cms.utils.i18n import get_current_language
-from django.conf import settings
-from django.db import models, transaction
-from django.utils import timezone
+from django.db import models
 from django.utils.functional import cached_property
-from django.utils.translation import ugettext_lazy as _
-
-from ...utils.copying import (
-    get_fields_to_copy,
-    refresh_from_db)
-from ...models import PUBLISHER_STATE_CHOICES, PublisherModelMixin, Publisher
+from ...models import PublisherModelMixin
 
 from .publisher.master import ParlerMasterPublisher
 from .publisher.translation import ParlerTranslationPublisher
@@ -65,11 +57,6 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
         if draft_version:
             return draft_version.get_absolute_url(language=language)
         return ''
-        # There is no draft of this url yet. get_object_draft_url will end up
-        # as the url in the button in the toolbar to "edit". If a user clicks
-        # on that we want to explicitly create a draft version if there is none
-        # yet.
-        return self.publisher.admin_urls.create_draft()
 
 
 from parler.models import TranslatedFields
