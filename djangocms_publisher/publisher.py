@@ -2,8 +2,10 @@
 from __future__ import print_function, unicode_literals
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.urlresolvers import reverse
 from django.db import models, transaction
 from django.db.models import Q
+from django.http import QueryDict
 from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
@@ -49,6 +51,11 @@ class Publisher(object):
         """
         return getattr(obj, self.name)
 
+    @cached_property
+    def admin_urls(self):
+        from .admin import AdminUrls
+        return AdminUrls(self.instance)
+
     @property
     def is_published_version(self):
         return self.instance.publisher_is_published_version
@@ -75,6 +82,11 @@ class Publisher(object):
 
     @property
     def has_pending_deletion_request(self):
+        published = self.get_published_version()
+        if not published:
+            return False
+        if self.instance != published:
+            return self.get_publisher(published).has_pending_deletion_request
         return self.instance.publisher_deletion_requested
 
     @property
@@ -238,7 +250,6 @@ class Publisher(object):
         )
 
     def update_relations_exclude(self, old_obj):
-        # FIXME: exclude placeholders
         return self.instance.publisher_update_relations_exclude(old_obj=old_obj)
 
     def can_publish(self):
@@ -271,7 +282,7 @@ class Publisher(object):
             actions['discard_draft'] = {}
         if self.is_published_version and not self.has_pending_changes:
             actions['create_draft'] = {}
-        if self.is_published_version and not self.has_pending_deletion_request:
+        if self.is_draft_version and not self.has_pending_deletion_request:
             actions['request_deletion'] = {}
         for action_name, data in actions.items():
             data['name'] = action_name

@@ -148,13 +148,33 @@ class ParlerTranslationPublisher(Publisher):
             return draft, False
         return self.create_draft(), True
 
+    @transaction.atomic
     def publish_deletion(self):
-        # FIXME: implement translation.publish_deletion
-        pass
+        assert self.instance.publisher_translation_deletion_requested
+        self.instance.delete()
 
+    @transaction.atomic
+    def request_deletion(self):
+        published = self.get_published_version()
+        if self.instance != published:
+            return published.publisher.request_deletion()
+        published.publisher_translation_deletion_requested = True
+        published.save(
+            update_fields=['publisher_translation_deletion_requested'],
+        )
+        draft = published.publisher.get_draft_version()
+        if draft:
+            draft.publisher.discard_draft()
+
+    def update_relations_exclude(self, old_obj):
+        return ()
+
+    @transaction.atomic
     def discard_deletion_request(self):
-        # FIXME: implement translation.discard_deletion_request
-        pass
+        self.instance.publisher_translation_deletion_requested = False
+        self.instance.save(
+            update_fields=['publisher_translation_deletion_requested'],
+        )
 
     @property
     def state(self):

@@ -4,6 +4,7 @@ from __future__ import print_function, unicode_literals
 from collections import OrderedDict
 
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -22,6 +23,12 @@ class ParlerPublisher(Publisher):
     It is similar to the parler master object which has screwed together the
     main object and an active translation.
     """
+
+    @cached_property
+    def admin_urls(self):
+        from ..admin import ParlerAdminUrls
+        return ParlerAdminUrls(self.instance)
+
     def get_draft_version(self):
         obj = super(ParlerPublisher, self).get_draft_version()
         if obj and not obj.language_code:
@@ -39,6 +46,7 @@ class ParlerPublisher(Publisher):
         return self.instance.language_code
 
     def get_translation(self):
+        # import ipdb;ipdb.set_trace()
         return self.instance.get_translation(self.language_code)
 
     @property
@@ -73,7 +81,7 @@ class ParlerPublisher(Publisher):
         now = now or timezone.now()
         language_code = self.instance.language_code
 
-        draft_translation = self.instance.get_translation(language_code)
+        draft_translation = self.get_translation()
         published_translation = draft_translation.publisher.publish(
             delete=False,
             update_relations=False,
@@ -98,11 +106,21 @@ class ParlerPublisher(Publisher):
         if self.has_pending_deletion_request:
             self.discard_deletion_request()
         language_code = self.instance.language_code
-        published_translation = self.instance.get_translation(language_code)
+        published_translation = self.get_translation()
         draft_translation = published_translation.publisher.create_draft()
         draft = draft_translation.master
         draft.set_current_language(language_code)
         return draft
+
+    @transaction.atomic
+    def discard_draft(self, update_relations=True):
+        try:
+            translation = self.get_translation()
+            translation.discard_draft()
+        except ObjectDoesNotExist:
+            pass
+        if not self.instance.translations.all().exists():
+            self.instance.master_publisher.disard_draft()
 
     def copy_relations(self, old_obj):
         # Call a method on the master object so any app specific relations can
@@ -117,29 +135,29 @@ class ParlerPublisher(Publisher):
         self.instance.publisher_can_publish()
 
     @transaction.atomic
+    def publish_deletion(self):
+        translation = self.instance.get_translation(self.instance.language_code)
+        translation.publish_deletion()
+        if not self.instance.translations.all().exists():
+            self.instance.delete()
+
+    @transaction.atomic
     def request_deletion(self):
         published = self.get_published_version()
         if self.instance != published:
             return published.publisher.request_deletion()
         language_code = published.language_code
         published_translation = published.get_translation(language_code)
-        published_translation.publisher_translation_deletion_requested = True
-        published_translation.save(update_fields=['publisher_translation_deletion_requested'])
-
-        # FIXME: delete the draft version
-        # FIXME: caveat: can't delete the last translation. be smart.
-        # draft = self.get_draft_version()
-        # if draft:
-        #     draft_translation.delete()
+        published_translation.publisher.request_deletion()
         return refresh_from_db(self.instance)
 
     @transaction.atomic
-    def discard_requested_deletion(self):
+    def discard_deletion_request(self):
         assert self.is_published_version
-        self.instance.publisher_translation_deletion_requested = False
-        self.instance.save(
-            update_fields=['publisher_translation_deletion_requested']
-        )
+        if self.instance.master_publisher.has_pending_deletion_request:
+            self.instance.master_publisher.discard_deletion_request()
+        translation = self.instance.get_translation(self.instance.language_code)
+        translation.publisher.discard_deletion_request()
 
     def all_translations(self, prefer_drafts=None):
         return self.all_translations_dict(prefer_drafts=prefer_drafts).values()

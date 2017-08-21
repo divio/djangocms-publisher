@@ -9,12 +9,61 @@ from django.conf.urls import url
 from django.contrib.admin.utils import unquote
 from django.forms.widgets import Media
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect, Http404, QueryDict
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 
 from . import admin_views
+
+
+class AdminUrls(object):
+    def __init__(self, instance):
+        self.instance = instance
+
+    def get_url(self, name, get=None, args=None):
+        if get is None:
+            get = QueryDict()
+        get = get.copy()
+        obj = self.instance
+        opts = self.instance._meta
+        if args is None:
+            args = (obj.pk,)
+        url = reverse(
+            'admin:{}_{}_{}'.format(
+                opts.app_label,
+                opts.model_name,
+                name,
+            ),
+            args=args,
+        )
+        if get:
+            url = '{}?{}'.format(url, get.urlencode())
+        return url
+
+    def get_action_url(self, action, **kwargs):
+        return self.get_url(
+            name='publisher_{}'.format(action),
+            **kwargs
+        )
+
+    def create_draft(self, **kwargs):
+        return self.get_action_url(action='create_draft', **kwargs)
+
+    def discard_draft(self, **kwargs):
+        return self.get_action_url(action='discard_draft', **kwargs)
+
+    def publish(self, **kwargs):
+        return self.get_action_url(action='publish', **kwargs)
+
+    def change(self, **kwargs):
+        return self.get_url('change', **kwargs)
+
+    def request_deletion(self, **kwargs):
+        return self.get_action_url(action='request_deletion', **kwargs)
+
+    def discard_deletion_request(self,  **kwargs):
+        return self.get_action_url(action='discard_deletion_request', **kwargs)
 
 
 class PublisherAdminMixinBase(object):
@@ -56,26 +105,6 @@ class PublisherAdminMixinBase(object):
     def publisher_get_admin_changelist_url(self, obj=None, get=None):
         info = obj._meta.app_label, obj._meta.model_name
         return reverse('admin:{}_{}_changelist'.format(*info))
-
-    def publisher_get_admin_action_url(self, obj, action, get=None):
-        opts = obj._meta
-        return reverse(
-            'admin:{}_{}_publisher_{}'.format(
-                opts.app_label,
-                opts.model_name,
-                action,
-            ),
-            args=(obj.pk,)
-        )
-
-    def publisher_get_admin_request_deletion_url(self, **kwargs):
-        return self.publisher_get_admin_action_url(action='request_deletion', **kwargs)
-
-    def publisher_get_admin_discard_deletion_request_url(self,  **kwargs):
-        return self.publisher_get_admin_action_url(action='discard_deletion_request', **kwargs)
-
-    def publisher_get_admin_discard_draft_url(self, **kwargs):
-        return self.publisher_get_admin_action_url(action='discard_draft', **kwargs)
 
     def publisher_get_is_enabled(self, request, obj):
         # This allows subclasses to disable draft-live logic. Returning False
@@ -189,6 +218,8 @@ class PublisherAdminMixinBase(object):
             buttons['delete'] = copy(defaults['delete'])
 
     def _publisher_get_buttons_edit(self, buttons, defaults, obj, has_publish_permission, has_delete_permission, request, actions=None):
+        action_urls = AdminUrls(obj)
+
         if actions is None:
             for action in obj.publisher.available_actions(request.user).values():
                 action_name = action['name']
@@ -197,11 +228,11 @@ class PublisherAdminMixinBase(object):
                 btn.update(action)
                 if action_name == 'request_deletion':
                     # Show link to the request deletion view
-                    btn['url'] = self.publisher_get_admin_request_deletion_url(obj=obj, get=request.GET)
+                    btn['url'] = action_urls.request_deletion(get=request.GET)
                 elif action_name == 'discard_requested_deletion':
-                    btn['url'] = self.publisher_get_admin_discard_deletion_request_url(obj=obj, get=request.GET)
+                    btn['url'] = action_urls.discard_deletion_request(get=request.GET)
                 elif action_name == 'discard_draft':
-                    btn['url'] = self.publisher_get_admin_discard_draft_url(obj=obj, get=request.GET)
+                    btn['url'] = action_urls.discard_draft(get=request.GET)
                 else:
                     # Default is to use the action together with saving
                     btn['field_name'] = '_{}'.format(action_name)
@@ -324,15 +355,18 @@ class PublisherAdminMixinBase(object):
             name=url_name,
         )
 
-    def get_urls(self):
-        urlpatterns = super(PublisherAdminMixinBase, self).get_urls()
+    def publisher_get_urls(self):
         return [
             self.publisher_get_action_urlpattern(admin_views.RequestDeletion),
             self.publisher_get_action_urlpattern(admin_views.DiscardDeletionRequest),
             self.publisher_get_action_urlpattern(admin_views.CreateDraft),
             self.publisher_get_action_urlpattern(admin_views.DiscardDraft),
             self.publisher_get_action_urlpattern(admin_views.Publish),
-        ] + urlpatterns
+        ]
+
+    def get_urls(self):
+        urlpatterns = super(PublisherAdminMixinBase, self).get_urls()
+        return self.publisher_get_urls() + urlpatterns
 
     # def publisher_request_deletion_view(self, request, object_id):
     #     """

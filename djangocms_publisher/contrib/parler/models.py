@@ -3,6 +3,7 @@ from __future__ import print_function, unicode_literals
 
 from collections import OrderedDict
 
+from cms.utils.i18n import get_current_language
 from django.conf import settings
 from django.db import models, transaction
 from django.utils import timezone
@@ -20,6 +21,10 @@ from .publisher.translation_aware import ParlerPublisher
 
 
 class ParlerPublisherModelMixin(PublisherModelMixin):
+
+    class Meta:
+        abstract = True
+
     # USER OVERRIDABLE
     def publisher_copy_relations_for_translation(self, old_obj):
         language_code = self.language_code
@@ -30,17 +35,6 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
     def publisher(self):
         return ParlerPublisher(instance=self, name='publisher')
 
-    # def get_master(self):
-    #     # Make sure this is *not* language aware
-    #     return self._meta.model.objects.get(pk=self.pk)
-
-    # @property
-    # def publisher(self):
-    #     if self.language_code:
-    #         return self.language_aware_publisher
-    #     else:
-    #         return self.master_publisher
-    #
     @cached_property
     def master_publisher(self):
         return ParlerMasterPublisher(instance=self, name='master_publisher')
@@ -51,8 +45,31 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
     def publisher_draft_or_published_translations_only_prefer_published(self):
         return self.publisher.all_translations(prefer_drafts=False)
 
-    class Meta:
-        abstract = True
+    def get_public_url(self, language=None):
+        # Used by django-cms toolbar to get the url for switching to the public
+        # version of the object
+        if not language:
+            language = get_current_language()
+        published_version = self.publisher.get_published_version()
+        if published_version:
+            return published_version.get_absolute_url(language=language)
+        return ''
+
+    def get_draft_url(self, language=None):
+        # Used by django-cms toolbar to get the url for switching to the draft
+        # version of the object. Contains some ugly magic to create the draft
+        # if it does not exist yet.
+        if not language:
+            language = get_current_language()
+        draft_version = self.publisher.get_draft_version()
+        if draft_version:
+            return draft_version.get_absolute_url(language=language)
+
+        # There is no draft of this url yet. get_object_draft_url will end up
+        # as the url in the button in the toolbar to "edit". If a user clicks
+        # on that we want to explicitly create a draft version if there is none
+        # yet.
+        return self.publisher.admin_urls.create_draft()
 
 
 from parler.models import TranslatedFields
@@ -71,11 +88,6 @@ class ParlerPublisherTranslatedFields(TranslatedFields):
             editable=False,
             db_index=True,
         )
-
-        # def get_parler_translation_publisher(translation):
-        #     master = translation.master
-        #     master.set_current_language(translation.language_code)
-        #     return master.publisher
 
         fields['publisher'] = cached_property(
             lambda self: ParlerTranslationPublisher(

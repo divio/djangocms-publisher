@@ -60,7 +60,7 @@ class AdminViewMixin(object):
         return obj.publisher.admin_urls.change(get=self.request.GET)
 
 
-class AdminConfirmationViewMixin(object):
+class AdminConfirmationViewMixin(AdminViewMixin):
     template_name = 'admin/djangocms_publisher/confirmation.html'
 
     def get_context_data(self, **kwargs):
@@ -76,7 +76,7 @@ class AdminConfirmationViewMixin(object):
         return context
 
 
-class RequestDeletion(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
+class RequestDeletion(AdminConfirmationViewMixin, DetailView):
     action_name = 'request_deletion'
 
     def get_context_data(self, **kwargs):
@@ -96,11 +96,11 @@ class RequestDeletion(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
 
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
-        published_obj = obj.publisher.request_deletion()
-        return HttpResponseRedirect(self.get_success_url(published_obj))
+        obj.publisher.request_deletion()
+        return HttpResponseRedirect(self.get_success_url(obj))
 
 
-class DiscardDeletionRequest(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
+class DiscardDeletionRequest(AdminConfirmationViewMixin, DetailView):
     action_name = 'discard_deletion_request'
 
     def get_context_data(self, **kwargs):
@@ -123,7 +123,7 @@ class DiscardDeletionRequest(AdminViewMixin, AdminConfirmationViewMixin, DetailV
         return HttpResponseRedirect(self.get_success_url(obj))
 
 
-class CreateDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
+class CreateDraft(AdminConfirmationViewMixin, DetailView):
     action_name = 'create_draft'
 
     def get_context_data(self, **kwargs):
@@ -146,7 +146,7 @@ class CreateDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
         return HttpResponseRedirect(self.get_success_url(draft_obj))
 
 
-class DiscardDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
+class DiscardDraft(AdminConfirmationViewMixin, DetailView):
     action_name = 'discard_draft'
 
     def get_context_data(self, **kwargs):
@@ -170,7 +170,7 @@ class DiscardDraft(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
         return HttpResponseRedirect(self.get_success_url(published_obj))
 
 
-class Publish(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
+class Publish(AdminConfirmationViewMixin, DetailView):
     action_name = 'publish'
 
     def get_context_data(self, **kwargs):

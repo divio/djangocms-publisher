@@ -1,19 +1,61 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
+from django.conf.urls import url
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
-from django.http import HttpResponseRedirect, Http404
+from django.http import HttpResponseRedirect, Http404, QueryDict
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
 from django.utils.encoding import force_text
-from ...admin import PublisherAdminMixinBase, get_all_button_defaults
-from . import utils
+from ...admin import PublisherAdminMixinBase, get_all_button_defaults, AdminUrls
+from . import utils, admin_views
+
+
+class ParlerAdminUrls(AdminUrls):
+    def get_url(self, name, get=None, args=None):
+        if get is None:
+            get = QueryDict()
+        get = get.copy()
+        get['language'] = self.instance.language_code
+        return super(ParlerAdminUrls, self).get_url(name=name, get=get)
+
+    def create_draft(self, **kwargs):
+        # Because django-cms toolbar does stupid things by just adding ?edit
+        # onto the url instead of checking if the url already has get params
+        # and use &edit instead, we're forced to put the language into the
+        # url instead of a get param for this view.
+        # Intentionally skipping get_url from self, because we don't want the
+        # language code as get param in this case.
+        return super(ParlerAdminUrls, self).get_url(
+            name='publisher_create_draft',
+            args=[self.instance.pk, self.instance.language_code],
+        )
 
 
 class PublisherParlerAdminMixin(PublisherAdminMixinBase):
     delete_confirmation_template = 'admin/djangocms_publisher/contrib/parler/translation_delete_request_confirmation.html'
+
+    def publisher_get_urls(self):
+        urls = super(PublisherParlerAdminMixin, self).publisher_get_urls()
+        return [
+            self.publisher_get_action_urlpattern_with_language(admin_views.CreateDraft)
+        ] + urls
+
+    def publisher_get_action_urlpattern_with_language(self, view):
+        opts = self.model._meta
+        url_segment = view.action_name.replace('_', '-')
+        url_name = '{0}_{1}_publisher_{2}'.format(
+            opts.app_label,
+            opts.model_name,
+            view.action_name,
+        )
+        return url(
+            r'^(?P<pk>.+)/' + url_segment + r'/(?P<language>[a-zA-Z_-]*)/$',
+            self.admin_site.admin_view(view.as_view(admin=self)),
+            name=url_name,
+        )
 
     @property
     def change_form_template(self):
@@ -59,10 +101,10 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
                         language_code.upper(),
                     )
             # Add the language to the url, so we don't loose that context
-            url = button.get('url', None)
-            if not url or '?language=' in url:
-                continue
-            button['url'] = url + '?language={}'.format(language_code)
+            # url = button.get('url', None)
+            # if not url or '?language=' in url:
+            #     continue
+            # button['url'] = url + '?language={}'.format(language_code)
         return buttons
 
     def delete_translation(self, request, object_id, language_code):
