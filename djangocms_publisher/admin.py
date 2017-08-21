@@ -221,10 +221,12 @@ class PublisherAdminMixinBase(object):
                 btn.update(action)
                 if action_name == 'request_deletion':
                     # Show link to the request deletion view
+                    btn['deletelink'] = True
                     btn['url'] = action_urls.request_deletion(get=request.GET)
                 elif action_name == 'discard_requested_deletion':
                     btn['url'] = action_urls.discard_deletion_request(get=request.GET)
                 elif action_name == 'discard_draft':
+                    btn['deletelink'] = True
                     btn['url'] = action_urls.discard_draft(get=request.GET)
                 elif action_name == 'create_draft':
                     btn['url'] = action_urls.create_draft(get=request.GET)
@@ -269,9 +271,9 @@ class PublisherAdminMixinBase(object):
                 buttons['delete'] = copy(defaults['delete'])
         if has_delete_permission:
             buttons['delete'] = copy(defaults['delete'])
-        if obj.publisher.is_published_version:
-            buttons['cancel'] = copy(defaults['cancel'])
-            buttons['cancel']['url'] = self.publisher_get_admin_changelist_url(obj)
+        # if obj.publisher.is_published_version:
+        #     buttons['cancel'] = copy(defaults['cancel'])
+        #     buttons['cancel']['url'] = self.publisher_get_admin_changelist_url(obj)
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         obj = self.get_object(request, object_id)
