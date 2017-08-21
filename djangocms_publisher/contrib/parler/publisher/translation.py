@@ -244,3 +244,9 @@ class ParlerTranslationPublisher(Publisher):
             for action, data in self.available_actions(user).items()
             if data['has_permission']
         ]
+
+    @cached_property
+    def aware_master(self):
+        master = refresh_from_db(self.instance.master)
+        master.set_current_language(self.instance.language_code)
+        return master

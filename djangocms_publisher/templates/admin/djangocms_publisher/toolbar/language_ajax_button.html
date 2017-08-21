@@ -1,0 +1,11 @@
+<a
+    {% if disabled %} tabindex="-1"{% endif %}
+    href="{{ action }}"
+    data-rel="ajax"
+    data-post="{{ data }}"
+    {% if question %} data-text="{{ question }}"{% endif %}
+    {% if on_success %} data-on-success="{{ on_success }}"{% endif %}
+    class="cms-btn{% if active %} cms-btn-active{% endif %}{% if disabled %} cms-btn-disabled{% endif %} {{ extra_classes|join:' ' }}"
+>
+    {% include 'admin/djangocms_publisher/tools/status_indicator.html' with state=state %} {{ name }} [{{ state.text }}]
+</a>

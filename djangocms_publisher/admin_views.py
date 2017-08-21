@@ -104,8 +104,6 @@ class RequestDeletion(AdminViewMixin, AdminConfirmationViewMixin, DetailView):
 
     def post(self, request, *args, **kwargs):
         obj = self.get_object()
-        if not obj.publisher.user_can_change(self.request.user):
-            raise PermissionDenied
         published_obj = obj.publisher.request_deletion()
         return HttpResponseRedirect(
             self.get_success_url(published_obj, edit=False)
