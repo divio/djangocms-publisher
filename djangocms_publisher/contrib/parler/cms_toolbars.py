@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 import json
 
 from django.conf import settings
+from django.utils.encoding import force_text
 from django.utils.translation import ugettext as _
 
 from cms.toolbar_pool import toolbar_pool
@@ -99,9 +100,8 @@ class PublisherToolbar(CMSToolbar):
                 # We're in edit mode. There is a draft article. Show the
                 # publish button.
                 self.add_publisher_publish_dropdown(draft_version)
-        else:
-            if published_version and published_version.publisher.has_pending_deletion_request:
-                self.add_publisher_delete_dropdown(published_version)
+        if published_version and published_version.publisher.has_pending_deletion_request:
+            self.add_publisher_delete_dropdown(published_version)
         if (
             (self.toolbar.edit_mode and not draft_version and not published_version.publisher.has_pending_deletion_request) or
             (not self.toolbar.edit_mode and published_version and not published_version.publisher.has_pending_deletion_request)
@@ -154,6 +154,9 @@ class PublisherToolbar(CMSToolbar):
             primary_button = self.get_create_draft_button(obj)
         container = Dropdown(side=self.toolbar.RIGHT)
         container.add_primary_button(primary_button)
+        container.buttons.append(
+            Button(name='----------------', url='', disabled=True)
+        )
         container.buttons.extend(self.get_language_buttons(obj))
         self.toolbar.add_item(container)
 
@@ -197,18 +200,36 @@ class PublisherToolbar(CMSToolbar):
             )
         )
         container.buttons.append(
-            Button(
+            AjaxButton(
                 name=_('Discard draft'),
-                url=onsite_url(obj.publisher.admin_urls.discard_draft()),
+                action=onsite_url(obj.publisher.admin_urls.discard_draft()),
+                data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
+                question=_(
+                    'Are you sure you want to discard the {language} draft '
+                    'version of "{object_name}"?'
+                ).format(
+                    language=obj.language_code,
+                    object_name=force_text(obj),
+                ),
             )
         )
         container.buttons.append(
-            Button(
+            AjaxButton(
                 name=_('Request deletion'),
-                url=onsite_url(obj.publisher.admin_urls.request_deletion()),
+                action=onsite_url(obj.publisher.admin_urls.request_deletion()),
+                data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
+                question=_(
+                    'Are you sure you want to request deletion for the '
+                    '{language} draft version of "{object_name}"?'
+                ).format(
+                    language=obj.language_code,
+                    object_name=force_text(obj),
+                ),
             )
         )
-
+        container.buttons.append(
+            Button(name='----------------', url='', disabled=True)
+        )
         container.buttons.extend(self.get_language_buttons(obj))
 
         self.toolbar.add_item(container)
@@ -220,6 +241,9 @@ class PublisherToolbar(CMSToolbar):
         else:
             delete_url = onsite_url(obj.publisher.admin_urls.delete_translation())
         container.add_primary_button(
+            # FIXME: This would be better in a modal. But we need to redirect
+            #        after the deletion, which does not work with the toolbar
+            #        and ModelButton.
             Button(
                 name=_('Delete'),
                 url=delete_url,
@@ -229,9 +253,10 @@ class PublisherToolbar(CMSToolbar):
             )
         )
         container.buttons.append(
-            Button(
+            AjaxButton(
                 name=_('Discard deletion request'),
-                url=onsite_url(obj.publisher.admin_urls.discard_deletion_request()),
+                action=onsite_url(obj.publisher.admin_urls.discard_deletion_request()),
+                data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
             ),
         )
         self.toolbar.add_item(container)

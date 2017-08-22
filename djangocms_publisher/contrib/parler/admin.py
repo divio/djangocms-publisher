@@ -3,8 +3,9 @@ from __future__ import unicode_literals
 
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
-from django.http import Http404, QueryDict
+from django.http import Http404, QueryDict, HttpResponseRedirect
 from django.template.loader import render_to_string
+from djangocms_publisher.utils.copying import refresh_from_db
 from ...admin import PublisherAdminMixinBase, AdminUrls
 from . import utils
 
@@ -69,15 +70,44 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
         language_code = request.GET.get('language_code')
         if not language_code:
             language_code = getattr(obj, 'language_code', None)
-        if 'delete' in buttons and obj and obj.publisher.is_published_version:
+
+        published_waiting_for_deletion = (
+            obj and
+            obj.publisher.is_published_version and
+            obj.publisher.has_pending_deletion_request
+        )
+        draft_without_any_published = (
+            obj and
+            obj.publisher.is_draft_version and
+            not obj.master_publisher.get_published_version()
+        )
+
+        if (
+            (
+                published_waiting_for_deletion or draft_without_any_published
+            ) and
+            language_code and
+            obj.translations.count() > 1 and
+            'delete' in buttons
+        ):
+            # Show the language specific delete view if there still is any
+            # language around.
             btn = buttons.get('delete')
-            if obj.translations.all().count() > 1:
-                btn['url'] = obj.publisher.admin_urls.delete_translation()
-                btn['label'] = '{} ({})'.format(
-                    btn['label'],
-                    language_code.upper(),
-                )
+            btn['url'] = obj.publisher.admin_urls.delete_translation()
+            btn['label'] = '{} ({})'.format(
+                btn['label'],
+                language_code.upper(),
+            )
         return buttons
+
+    def response_delete(self, request, obj_display, obj_id):
+        if request.GET.get('redirect') == 'onsite':
+            # TODO: Anything better we can do?
+            return HttpResponseRedirect('/')
+        return (
+            super(PublisherParlerAdminMixin, self)
+            .response_delete(request, obj_display, obj_id)
+        )
 
     def delete_translation(self, request, object_id, language_code):
         root_model = self.model._parler_meta.root_model
@@ -85,6 +115,27 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             translation = root_model.objects.get(master_id=unquote(object_id), language_code=language_code)
         except root_model.DoesNotExist:
             raise Http404
+
+        # These are needed for the redirect later on.
+        master_draft = (
+            translation
+            .master
+            .master_publisher
+            .get_draft_version()
+        )
+        master_published = (
+            translation
+            .master
+            .master_publisher
+            .get_published_version()
+        )
+        master_pks = set()
+        if master_draft:
+            master_pks.add(master_draft.pk)
+        if master_published:
+            master_pks.add(master_published.pk)
+        # /
+
         is_published_version_and_deletion_already_requested = (
             translation.publisher.is_published_version and
             translation.publisher.has_pending_deletion_request
@@ -102,10 +153,32 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
             if not self.has_publish_permission(request, translation):
                 # TODO: Show a message about denied permission instead?
                 raise PermissionDenied
-            return (
+            response = (
                 super(PublisherParlerAdminMixin, self)
                 .delete_translation(request, object_id, language_code)
             )
+            if request.method == 'POST' and response.status_code == 302:
+                # The translation has been deleted. Lets figure out a good place
+                # to redirect to.
+                onsite = request.GET.get('redirect') == 'onsite'
+                obj = (
+                    self.model.objects
+                    .filter(pk__in=master_pks)
+                    .order_by('-publisher_is_published_version')
+                    .first()
+                 )
+                if obj:
+                    if onsite:
+                        return HttpResponseRedirect(obj.get_absolute_url())
+                    else:
+                        return HttpResponseRedirect(obj.master_publisher.admin_urls.change())
+                else:
+                    if onsite:
+                        # TODO: anything better we can do?
+                        return HttpResponseRedirect('/')
+                    else:
+                        return HttpResponseRedirect(self.publisher_get_admin_changelist_url())
+            return response
         # This means it is a draft or published object that needs a deletion
         # request before it can be deleted.
         raise PermissionDenied

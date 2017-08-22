@@ -165,11 +165,10 @@ class ParlerPublisher(Publisher):
         translation = self.instance.get_translation(self.instance.language_code)
         translation.publisher.discard_deletion_request()
 
-    def all_translations(self, prefer_drafts=None):
+    def all_translations(self, prefer_drafts=True):
         return self.all_translations_dict(prefer_drafts=prefer_drafts).values()
 
-    def all_translations_dict(self, prefer_drafts=None):
-        # FIXME: reduce queries
+    def all_translations_qs(self):
         draft = self.instance.master_publisher.get_draft_version()
         published = self.instance.master_publisher.get_published_version()
         master_pks = set()
@@ -177,7 +176,14 @@ class ParlerPublisher(Publisher):
             master_pks.add(draft.pk)
         if published:
             master_pks.add(published.pk)
-        qs = self.instance._parler_meta.root_model.objects.filter(master_id__in=master_pks)
+        return (
+            self.instance._parler_meta.root_model
+            .objects.filter(master_id__in=master_pks)
+        )
+
+    def all_translations_dict(self, prefer_drafts=True):
+        # FIXME: reduce queries
+        qs = self.all_translations_qs()
         translations = {}
         for translation in qs:
             lang = translations.setdefault(translation.language_code, {})
@@ -186,13 +192,13 @@ class ParlerPublisher(Publisher):
             else:
                 lang['published'] = translation
         result = {}
-        if prefer_drafts is True:
+        if prefer_drafts:
             for lang, versions in translations.items():
                 if 'draft' in versions:
                     result[lang] = versions['draft']
                 else:
                     result[lang] = versions['published']
-        if prefer_drafts is False:
+        else:
             for lang, versions in translations.items():
                 if 'published' in versions:
                     result[lang] = versions['published']

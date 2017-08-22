@@ -49,8 +49,10 @@ class AdminViewMixin(object):
             self.request.GET.get('redirect', 'admin')
         )
         if redirect == 'onsite':
-            # Dirty workaround so we don't have to subclass all these views in
-            # contrib.parler.
+            # Onsite redirect is used by django cms toolbar to stay on the site
+            # after the operation.
+            # We handle the language here because we don't want to duplicate the
+            # logic of all these views in djangocms_publisher.contrib.parler.
             language = self.request.GET.get('language', None)
             try:
                 url = obj.get_absolute_url(language=language)

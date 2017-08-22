@@ -267,8 +267,6 @@ class PublisherAdminMixinBase(object):
             if has_publish_permission:
                 buttons.pop('publish_deletion', None)
                 buttons['delete'] = copy(defaults['delete'])
-        if has_delete_permission:
-            buttons['delete'] = copy(defaults['delete'])
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         obj = self.get_object(request, object_id)
