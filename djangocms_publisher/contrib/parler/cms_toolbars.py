@@ -5,17 +5,12 @@ from __future__ import unicode_literals
 import json
 
 from django.conf import settings
+from django.utils.translation import ugettext as _
 
-from cms.cms_toolbars import LANGUAGE_MENU_IDENTIFIER
 from cms.toolbar_pool import toolbar_pool
 from cms.constants import FOLLOW_REDIRECT
 from cms.toolbar.items import Dropdown, Button, BaseButton, ModalButton
-
 from cms.utils import get_cms_setting
-from django.http import QueryDict
-
-from django.utils.translation import ugettext as _
-
 from cms.toolbar_base import CMSToolbar
 
 
@@ -96,10 +91,6 @@ class PublisherToolbar(CMSToolbar):
     publisher_disable_core_draft_live = True
     publisher_disable_languages_menu = True
 
-    # def populate(self):
-    #     super(PublisherToolbar, self).populate()
-    #     self.remove_unwanted_menus()
-
     def setup_publisher_toolbar(self, obj):
         draft_version = obj.publisher.get_draft_version()
         published_version = obj.publisher.get_published_version()
@@ -145,11 +136,6 @@ class PublisherToolbar(CMSToolbar):
                         data={'csrfmiddlewaretoken': self.toolbar.csrf_token},
                         state=translation.publisher.state,
                     )
-                    # btn = LanguageButton(
-                    #     name=all_languages.get(translation.language_code),
-                    #     url=onsite_url(published.publisher.admin_urls.create_draft()),
-                    #     state=published.publisher.state,
-                    # )
             else:
                 btn = LanguageModalButton(
                     name=all_languages[code],
@@ -166,12 +152,7 @@ class PublisherToolbar(CMSToolbar):
             primary_button = self.get_change_draft_button(draft)
         else:
             primary_button = self.get_create_draft_button(obj)
-        container = Dropdown(
-            side=self.toolbar.RIGHT,
-            extra_classes=[
-                'cms-btn-action',
-            ],
-        )
+        container = Dropdown(side=self.toolbar.RIGHT)
         container.add_primary_button(primary_button)
         container.buttons.extend(self.get_language_buttons(obj))
         self.toolbar.add_item(container)
@@ -195,26 +176,11 @@ class PublisherToolbar(CMSToolbar):
                     get_cms_setting('CMS_TOOLBAR_URL__EDIT_ON'),
                 )
             ),
-            extra_classes=[
-                'cms-btn-action',
-            ],
         )
 
     def add_publisher_publish_dropdown(self, obj):
-        container = Dropdown(
-            side=self.toolbar.RIGHT,
-            extra_classes=[
-                'cms-btn-action',
-            ],
-        )
+        container = Dropdown(side=self.toolbar.RIGHT)
         container.add_primary_button(
-            # Button(
-            #     name=_('Publish'),
-            #     url=onsite_url(obj.publisher.admin_urls.publish()),
-            #     extra_classes=[
-            #         'cms-btn-action',
-            #     ],
-            # )
             AjaxButton(
                 name=_('Publish'),
                 action=onsite_url(obj.publisher.admin_urls.publish()),
@@ -248,9 +214,7 @@ class PublisherToolbar(CMSToolbar):
         self.toolbar.add_item(container)
 
     def add_publisher_delete_dropdown(self, obj):
-        container = Dropdown(
-            side=self.toolbar.RIGHT,
-        )
+        container = Dropdown(side=self.toolbar.RIGHT)
         if obj.translations.count() <= 1:
             delete_url = onsite_url(obj.publisher.admin_urls.delete())
         else:
@@ -260,7 +224,7 @@ class PublisherToolbar(CMSToolbar):
                 name=_('Delete'),
                 url=delete_url,
                 extra_classes=[
-                    'cms-btn-cation',
+                    'cms-btn-caution',
                 ],
             )
         )
@@ -271,10 +235,6 @@ class PublisherToolbar(CMSToolbar):
             ),
         )
         self.toolbar.add_item(container)
-    #
-    # def remove_unwanted_menus(self):
-    #     # print self.toolbar.menus.pop(LANGUAGE_MENU_IDENTIFIER, None)
-    #     import ipdb; ipdb.set_trace()
 
 
 try:
@@ -286,6 +246,8 @@ except:
 class PublisherNoDraftLiveButtonsPageToolbar(PageToolbar):
     def post_template_populate(self):
         self.init_placeholders()
+
+        # Don't show show the draft/live buttons for apps that don't need them.
         show_core_draft_live = True
         for toolbar in self.toolbar.toolbars.values():
             if toolbar.is_current_app and getattr(toolbar, 'publisher_disable_core_draft_live', False):
@@ -293,25 +255,10 @@ class PublisherNoDraftLiveButtonsPageToolbar(PageToolbar):
                 break
         if show_core_draft_live:
             self.add_draft_live()
+        # /
+
         self.add_publish_button()
         self.add_structure_mode()
 
-    def add_language_menu(self):
-        show_languages = True
-        for toolbar in self.toolbar.toolbars.values():
-            if toolbar.is_current_app and getattr(toolbar, 'publisher_disable_languages_menu', False):
-                show_languages = False
-                break
-        if show_languages:
-            super(PublisherNoDraftLiveButtonsPageToolbar, self).add_language_menu()
-
-    def change_language_menu(self):
-        show_languages = True
-        for toolbar in self.toolbar.toolbars.values():
-            if toolbar.is_current_app and getattr(toolbar, 'publisher_disable_languages_menu', False):
-                show_languages = False
-                break
-        if show_languages:
-            super(PublisherNoDraftLiveButtonsPageToolbar, self).change_language_menu()
 
 toolbar_pool.toolbars['cms.cms_toolbars.PageToolbar'] = PublisherNoDraftLiveButtonsPageToolbar
