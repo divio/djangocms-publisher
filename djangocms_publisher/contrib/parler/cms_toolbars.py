@@ -6,13 +6,15 @@ import json
 
 from django.conf import settings
 from django.utils.encoding import force_text
+from django.utils.functional import cached_property
 from django.utils.translation import ugettext as _
 
-from cms.toolbar_pool import toolbar_pool
 from cms.constants import FOLLOW_REDIRECT
+from cms.plugin_rendering import LegacyRenderer
+from cms.toolbar_pool import toolbar_pool
 from cms.toolbar.items import Dropdown, Button, BaseButton, ModalButton
-from cms.utils import get_cms_setting
 from cms.toolbar_base import CMSToolbar
+from cms.utils import get_cms_setting
 
 
 class AjaxButton(BaseButton):
@@ -287,3 +289,27 @@ class PublisherNoDraftLiveButtonsPageToolbar(PageToolbar):
 
 
 toolbar_pool.toolbars['cms.cms_toolbars.PageToolbar'] = PublisherNoDraftLiveButtonsPageToolbar
+
+
+
+class ObjectAwareLegacyRenderer(LegacyRenderer):
+    def __init__(self, request):
+        super(ObjectAwareLegacyRenderer, self).__init__(request)
+        obj = self.toolbar.obj
+        edit_mode_active = bool(self.toolbar.edit_mode_active)
+        if (
+            edit_mode_active and
+            obj and
+            hasattr(obj, 'publisher') and
+            obj.publisher.is_published_version
+        ):
+            self._placeholders_are_editable = False
+        else:
+            self._placeholders_are_editable = edit_mode_active
+
+
+def legacy_renderer(self):
+    return ObjectAwareLegacyRenderer(request=self.request)
+
+from cms.toolbar.toolbar import CMSToolbar
+CMSToolbar.legacy_renderer = cached_property(legacy_renderer)
