@@ -4,3 +4,79 @@
 [class*=column-publisher_translation_state_] {
     width: 1%;
 }
+
+.cms-pagetree-node-state {
+  -webkit-box-sizing: border-box;
+          box-sizing: border-box;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 100%;
+  border: 2px solid #fff;
+  background: #fff;
+  vertical-align: top;
+}
+
+.cms-btn .cms-pagetree-node-state {
+  vertical-align: middle;
+  margin-right: 5px;
+  margin-top: -4px;
+}
+.cms-btn:hover .cms-pagetree-node-state-dirty {
+  -webkit-box-shadow: 0 0 0 1px white;
+          box-shadow: 0 0 0 1px white;
+}
+
+.cms-pagetree-node-state-empty {
+  border-color: #999999;
+  background-color: #fff;
+}
+.cms-pagetree-node-state-unpublished, .cms-pagetree-node-state-unpublished-parent {
+  border-color: #999999;
+  background-color: #999999;
+}
+.cms-pagetree-node-state-published {
+  border-color: #693;
+  background-color: #693;
+}
+.cms-pagetree-node-state-dirty {
+  -webkit-animation: pulsate 2.5s ease-out infinite;
+          animation: pulsate 2.5s ease-out infinite;
+  border-color: #00bbff;
+  background-color: #00bbff;
+}
+.cms-pagetree-node-state-deletion {
+  border-color: #f00;
+  background-color: #f00;
+}
+
+@-webkit-keyframes pulsate {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes pulsate {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+.parler-language-tabs .cms-pagetree-node-state {
+    display: inline-block;
+    vertical-align: middle;
+    margin-top: -3px;
+    margin-left: 6px;
+}

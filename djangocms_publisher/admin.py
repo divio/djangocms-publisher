@@ -71,11 +71,9 @@ class AdminUrls(object):
 class PublisherAdminMixinBase(object):
     @property
     def media(self):
-        # FIXME: we should rather bundle our own css for the little status dots
         return super(PublisherAdminMixinBase, self).media + Media(
             css={
                 'all': (
-                    static_with_version('cms/css/cms.pagetree.css'),
                     'djangocms_publisher/admin/djangocms_publisher.admin.css',
                 ),
             },

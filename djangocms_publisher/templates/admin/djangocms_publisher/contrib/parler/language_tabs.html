@@ -16,13 +16,10 @@
             {% endif %}
             <span class="{{ tab.status }}">
                 {% if tab.status == 'current' %}
-                    {{ tab.title }}&nbsp;&nbsp;&nbsp;&nbsp;
+                    {{ tab.title }}{% include 'admin/djangocms_publisher/tools/status_indicator.html' with state=tab.publisher_state %}
                 {% else %}
-                    <a href="{{ tab.url }}">{{ tab.title }}</a>
+                    <a href="{{ tab.url }}">{{ tab.title }}{% include 'admin/djangocms_publisher/tools/status_indicator.html' with state=tab.publisher_state %}</a>
                 {% endif %}
-                <div style="display: inline-block; padding: 10px 0px;">
-                    {% include 'admin/djangocms_publisher/tools/status_indicator.html' with state=tab.publisher_state %}
-                </div>
                 {% if language_tabs.allow_deletion %}
                     {% if tab.status == 'current' and language_tabs.current_is_translated or tab.status == 'available'  %}
                         <a class="deletelink" href="./delete-translation/{{ tab.code }}/" title="{% trans 'Delete Translation' %}">&nbsp;</a>
