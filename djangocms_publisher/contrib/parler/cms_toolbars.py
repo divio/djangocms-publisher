@@ -4,13 +4,13 @@ from __future__ import unicode_literals
 
 import json
 
+
 from django.conf import settings
 from django.utils.encoding import force_text
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext as _
 
 from cms.constants import FOLLOW_REDIRECT
-from cms.plugin_rendering import LegacyRenderer
 from cms.toolbar_pool import toolbar_pool
 from cms.toolbar.items import Dropdown, Button, BaseButton, ModalButton
 from cms.toolbar_base import CMSToolbar
@@ -291,25 +291,43 @@ class PublisherNoDraftLiveButtonsPageToolbar(PageToolbar):
 toolbar_pool.toolbars['cms.cms_toolbars.PageToolbar'] = PublisherNoDraftLiveButtonsPageToolbar
 
 
+# EVIL Monkeypatches
+from cms.plugin_rendering import LegacyRenderer
+
+
+def is_really_editable(toolbar):
+    obj = toolbar.obj
+    edit_mode_active = bool(toolbar.edit_mode_active)
+    if (
+        edit_mode_active and
+        obj and
+        hasattr(obj, 'publisher') and
+        obj.publisher.is_published_version
+    ):
+        return False
+    return edit_mode_active
+
 
 class ObjectAwareLegacyRenderer(LegacyRenderer):
     def __init__(self, request):
         super(ObjectAwareLegacyRenderer, self).__init__(request)
-        obj = self.toolbar.obj
-        edit_mode_active = bool(self.toolbar.edit_mode_active)
-        if (
-            edit_mode_active and
-            obj and
-            hasattr(obj, 'publisher') and
-            obj.publisher.is_published_version
-        ):
-            self._placeholders_are_editable = False
-        else:
-            self._placeholders_are_editable = edit_mode_active
+        self._placeholders_are_editable = is_really_editable(self.toolbar)
 
 
 def legacy_renderer(self):
     return ObjectAwareLegacyRenderer(request=self.request)
 
 from cms.toolbar.toolbar import CMSToolbar
+
 CMSToolbar.legacy_renderer = cached_property(legacy_renderer)
+
+from cms.templatetags.cms_tags import CMSEditableObject
+
+def _is_editable(self, request):
+    return (
+        request and
+        hasattr(request, 'toolbar') and
+        is_really_editable(request.toolbar)
+    )
+CMSEditableObject._is_editable = _is_editable
+# /
