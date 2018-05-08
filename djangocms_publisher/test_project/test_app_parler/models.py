@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-
 from django.db import models
 from django.db.models import Q
-from django.utils.encoding import python_2_unicode_compatible, force_text
-from djangocms_publisher.models import (
-    PublisherQuerySetMixin,
-)
+from django.utils.encoding import force_text, python_2_unicode_compatible
+from parler.managers import TranslatableQuerySet
+from parler.models import TranslatableModel
+
 from djangocms_publisher.contrib.parler.models import (
     ParlerPublisherModelMixin,
     ParlerPublisherTranslatedFields,
 )
-from parler.models import TranslatableModel
-from parler.managers import TranslatableQuerySet
+from djangocms_publisher.models import PublisherQuerySetMixin
 
 
 class ParlerThingQuerySet(PublisherQuerySetMixin, TranslatableQuerySet):

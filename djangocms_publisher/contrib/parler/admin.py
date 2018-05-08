@@ -2,12 +2,12 @@
 from __future__ import unicode_literals
 
 from django.contrib.admin.utils import unquote
-from django.core.exceptions import PermissionDenied, ObjectDoesNotExist
-from django.http import Http404, QueryDict, HttpResponseRedirect
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.http import Http404, HttpResponseRedirect, QueryDict
 from django.template.loader import render_to_string
-from djangocms_publisher.utils.copying import refresh_from_db
-from ...admin import PublisherAdminMixinBase, AdminUrls
+
 from . import utils
+from ...admin import AdminUrls, PublisherAdminMixinBase
 
 
 class ParlerAdminUrls(AdminUrls):
@@ -166,7 +166,7 @@ class PublisherParlerAdminMixin(PublisherAdminMixinBase):
                     .filter(pk__in=master_pks)
                     .order_by('-publisher_is_published_version')
                     .first()
-                 )
+                )
                 if obj:
                     if onsite:
                         return HttpResponseRedirect(obj.get_absolute_url())

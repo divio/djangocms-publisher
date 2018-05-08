@@ -4,17 +4,17 @@ from __future__ import unicode_literals
 
 import json
 
-
+from cms.constants import FOLLOW_REDIRECT
+from cms.plugin_rendering import LegacyRenderer
+from cms.templatetags.cms_tags import CMSEditableObject
+from cms.toolbar.items import BaseButton, Button, Dropdown, ModalButton
+from cms.toolbar_base import CMSToolbar
+from cms.toolbar_pool import toolbar_pool
+from cms.utils import get_cms_setting
 from django.conf import settings
 from django.utils.encoding import force_text
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext as _
-
-from cms.constants import FOLLOW_REDIRECT
-from cms.toolbar_pool import toolbar_pool
-from cms.toolbar.items import Dropdown, Button, BaseButton, ModalButton
-from cms.toolbar_base import CMSToolbar
-from cms.utils import get_cms_setting
 
 
 class AjaxButton(BaseButton):
@@ -266,7 +266,7 @@ class PublisherToolbar(CMSToolbar):
 
 try:
     PageToolbar = toolbar_pool.toolbars['cms.cms_toolbars.PageToolbar']
-except:
+except KeyError:
     from cms.cms_toolbars import PageToolbar
 
 
@@ -292,8 +292,6 @@ toolbar_pool.toolbars['cms.cms_toolbars.PageToolbar'] = PublisherNoDraftLiveButt
 
 
 # EVIL Monkeypatches
-from cms.plugin_rendering import LegacyRenderer
-
 
 def is_really_editable(toolbar):
     obj = toolbar.obj
@@ -317,11 +315,12 @@ class ObjectAwareLegacyRenderer(LegacyRenderer):
 def legacy_renderer(self):
     return ObjectAwareLegacyRenderer(request=self.request)
 
-from cms.toolbar.toolbar import CMSToolbar
+
+from cms.toolbar.toolbar import CMSToolbar  # noqa: E402, I001
+
 
 CMSToolbar.legacy_renderer = cached_property(legacy_renderer)
 
-from cms.templatetags.cms_tags import CMSEditableObject
 
 def _is_editable(self, request):
     return (
@@ -329,5 +328,7 @@ def _is_editable(self, request):
         hasattr(request, 'toolbar') and
         is_really_editable(request.toolbar)
     )
+
+
 CMSEditableObject._is_editable = _is_editable
 # /

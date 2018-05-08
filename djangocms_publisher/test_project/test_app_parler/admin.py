@@ -2,12 +2,13 @@
 from __future__ import unicode_literals
 
 from django.contrib import admin
-
-from djangocms_publisher.contrib.parler.admin import PublisherParlerAdminMixin
 from parler.admin import TranslatableAdmin
 
-from djangocms_publisher.contrib.parler.utils import \
-    publisher_translation_states_admin_field_names
+from djangocms_publisher.contrib.parler.admin import PublisherParlerAdminMixin
+from djangocms_publisher.contrib.parler.utils import (
+    publisher_translation_states_admin_field_names,
+)
+
 from . import models
 
 

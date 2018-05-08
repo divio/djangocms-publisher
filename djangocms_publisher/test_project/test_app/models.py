@@ -5,7 +5,10 @@ from django.db import models
 from django.db.models import Q
 from django.utils.encoding import python_2_unicode_compatible
 
-from djangocms_publisher.models import PublisherModelMixin, PublisherQuerySetMixin
+from djangocms_publisher.models import (
+    PublisherModelMixin,
+    PublisherQuerySetMixin,
+)
 
 
 def _repr(obj, extra=None):

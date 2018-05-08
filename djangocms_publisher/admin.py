@@ -4,11 +4,10 @@ from __future__ import unicode_literals
 from collections import OrderedDict
 from copy import copy
 
-from cms.utils.urlutils import static_with_version
 from django.conf.urls import url
 from django.core.exceptions import PermissionDenied
-from django.forms.widgets import Media
 from django.core.urlresolvers import reverse
+from django.forms.widgets import Media
 from django.http import HttpResponseRedirect, QueryDict
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext as _
@@ -61,7 +60,7 @@ class AdminUrls(object):
     def request_deletion(self, **kwargs):
         return self.get_action_url(action='request_deletion', **kwargs)
 
-    def discard_deletion_request(self,  **kwargs):
+    def discard_deletion_request(self, **kwargs):
         return self.get_action_url(action='discard_deletion_request', **kwargs)
 
     def delete(self, **kwargs):

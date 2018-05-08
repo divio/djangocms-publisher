@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-
 from cms.utils.i18n import get_current_language
 from django.db import models
 from django.utils.functional import cached_property
-from ...models import PublisherModelMixin
+from parler.models import TranslatedFields
 
+from ...models import PublisherModelMixin
 from .publisher.master import ParlerMasterPublisher
 from .publisher.translation import ParlerTranslationPublisher
 from .publisher.translation_aware import ParlerPublisher
@@ -19,7 +19,8 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
 
     # USER OVERRIDABLE
     def publisher_copy_relations_for_translation(self, old_obj):
-        language_code = self.language_code
+        pass
+        # language_code = self.language_code
         # e.g copy placeholders for a specific language
     # /USER OVERRIDABLE
 
@@ -59,9 +60,6 @@ class ParlerPublisherModelMixin(PublisherModelMixin):
         return ''
 
 
-from parler.models import TranslatedFields
-
-
 class ParlerPublisherTranslatedFields(TranslatedFields):
     def __init__(self, meta=None, **fields):
         fields['publisher_translation_published_at'] = models.DateTimeField(
@@ -83,4 +81,3 @@ class ParlerPublisherTranslatedFields(TranslatedFields):
             )
         )
         super(ParlerPublisherTranslatedFields, self).__init__(meta, **fields)
-
