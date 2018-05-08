@@ -24,7 +24,7 @@ HELPER_SETTINGS = {
     'LANGUAGE_CODE': 'en',
     'LANGUAGES': (
         ('en', gettext('English')),
-        ('fr_FR', gettext('French')),
+        ('fr-fr', gettext('French')),
         ('de', gettext('Italiano')),
     ),
     'CMS_LANGUAGES': {
@@ -40,7 +40,7 @@ HELPER_SETTINGS = {
                 'public': True,
             },
             {
-                'code': 'fr_FR',
+                'code': 'fr-fr',
                 'name': gettext('French'),
                 'public': True,
             },

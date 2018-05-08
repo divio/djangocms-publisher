@@ -88,7 +88,7 @@ class PublisherAdminMixinBase(object):
             return readonly_fields
         if obj.publisher_is_published_version:
             readonly_fields = set(readonly_fields)
-            all_field_names = set(obj._meta.get_all_field_names())
+            all_field_names = set([f.name for f in obj._meta.get_fields()])
             readonly_fields = readonly_fields | all_field_names
         return list(readonly_fields)
 
