@@ -4,6 +4,11 @@ from __future__ import unicode_literals
 
 import json
 
+from django.conf import settings
+from django.utils.encoding import force_text
+from django.utils.functional import cached_property
+from django.utils.translation import ugettext as _
+
 from cms.constants import FOLLOW_REDIRECT
 from cms.plugin_rendering import LegacyRenderer
 from cms.templatetags.cms_tags import CMSEditableObject
@@ -11,10 +16,6 @@ from cms.toolbar.items import BaseButton, Button, Dropdown, ModalButton
 from cms.toolbar_base import CMSToolbar
 from cms.toolbar_pool import toolbar_pool
 from cms.utils import get_cms_setting
-from django.conf import settings
-from django.utils.encoding import force_text
-from django.utils.functional import cached_property
-from django.utils.translation import ugettext as _
 
 
 class AjaxButton(BaseButton):
@@ -316,7 +317,7 @@ def legacy_renderer(self):
     return ObjectAwareLegacyRenderer(request=self.request)
 
 
-from cms.toolbar.toolbar import CMSToolbar  # noqa: E402, I001
+from cms.toolbar.toolbar import CMSToolbar  # noqa: E402 # isort:skip
 
 
 CMSToolbar.legacy_renderer = cached_property(legacy_renderer)

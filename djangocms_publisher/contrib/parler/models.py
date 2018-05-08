@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-from cms.utils.i18n import get_current_language
 from django.db import models
 from django.utils.functional import cached_property
 from parler.models import TranslatedFields
+
+from cms.utils.i18n import get_current_language
 
 from ...models import PublisherModelMixin
 from .publisher.master import ParlerMasterPublisher

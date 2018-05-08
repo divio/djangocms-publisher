@@ -9,7 +9,7 @@ python:
   - "2.7"
 
 install:
-  - pip install tox-travis coveralls
+  - pip install tox-travis coveralls isort
 
 branches:
   only:
@@ -17,6 +17,7 @@ branches:
 
 script:
   - tox
+  - isort -c
 
 after_success:
   - coveralls --config_file=.coveragerc
