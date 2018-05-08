@@ -15,7 +15,7 @@ from cms.templatetags.cms_tags import CMSEditableObject
 from cms.toolbar.items import BaseButton, Button, Dropdown, ModalButton
 from cms.toolbar_base import CMSToolbar
 from cms.toolbar_pool import toolbar_pool
-from cms.utils import get_cms_setting
+from cms.utils.conf import get_cms_setting
 
 
 class AjaxButton(BaseButton):
