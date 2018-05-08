@@ -1,0 +1,9 @@
+{% load i18n %}
+<ul>
+    {% for state in states %}
+        <li>
+            {{ state.language_code }}
+            {% include 'admin/djangocms_publisher/tools/status_indicator.html' %}
+        </li>
+    {% endfor %}
+</ul>

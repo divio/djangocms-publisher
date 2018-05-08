@@ -1,0 +1,31 @@
+{% load i18n %}{% comment %}
+
+    Include this block at the bottom of the object-tools:
+
+    {% block object-tools %}
+      {{ block.super }}
+      {% if language_tabs %}{% include "admin/parler/language_tabs.html" %}{% endif %}
+    {% endblock %}
+
+{% endcomment %}
+{% if language_tabs %}
+    <div class="parler-language-tabs{% if language_tabs.css_class %} {{ language_tabs.css_class }}{% endif %}">
+        {% for tab in language_tabs %}
+            {% if tab.status == 'current' %}
+                <input type="hidden" class="language_button selected" name="{{ tab.code }}" />
+            {% endif %}
+            <span class="{{ tab.status }}">
+                {% if tab.status == 'current' %}
+                    {{ tab.title }}{% include 'admin/djangocms_publisher/tools/status_indicator.html' with state=tab.publisher_state %}
+                {% else %}
+                    <a href="{{ tab.url }}">{{ tab.title }}{% include 'admin/djangocms_publisher/tools/status_indicator.html' with state=tab.publisher_state %}</a>
+                {% endif %}
+                {% if language_tabs.allow_deletion %}
+                    {% if tab.status == 'current' and language_tabs.current_is_translated or tab.status == 'available'  %}
+                        <a class="deletelink" href="./delete-translation/{{ tab.code }}/" title="{% trans 'Delete Translation' %}">&nbsp;</a>
+                    {% endif %}
+                {% endif %}
+            </span>
+        {% endfor %}
+    </div>
+{% endif %}

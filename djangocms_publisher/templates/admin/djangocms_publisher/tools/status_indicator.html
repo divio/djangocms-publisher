@@ -1,0 +1,12 @@
+{% if state.identifier == 'pending_deletion' %}
+    <div {# Not using span because parler has a stupid rule to hide all spans in the language tabs #}
+        class="cms-pagetree-node-state cms-pagetree-node-state-deletion"
+        title="{% if state.language_code %}{{ state.language_code|upper }}: {% endif %}{{ state.text }}"
+    ></div>
+{% else %}
+    <div
+        style=""
+        class="cms-pagetree-node-state cms-pagetree-node-state-{{ state.css_class }} {{ state.css_class }}"
+        title="{% if state.language_code %}{{ state.language_code|upper }}: {% endif %}{{ state.text }}"
+    ></div>
+{% endif %}
