@@ -2,11 +2,11 @@
 from __future__ import absolute_import
 
 import os
-from tempfile import mkdtemp
 
 
 def gettext(s):
     return s
+
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -24,7 +24,7 @@ HELPER_SETTINGS = {
     'LANGUAGE_CODE': 'en',
     'LANGUAGES': (
         ('en', gettext('English')),
-        ('fr_FR', gettext('French')),
+        ('fr-fr', gettext('French')),
         ('de', gettext('Italiano')),
     ),
     'CMS_LANGUAGES': {
@@ -40,7 +40,7 @@ HELPER_SETTINGS = {
                 'public': True,
             },
             {
-                'code': 'fr_FR',
+                'code': 'fr-fr',
                 'name': gettext('French'),
                 'public': True,
             },
@@ -55,6 +55,7 @@ HELPER_SETTINGS = {
 def run():
     from djangocms_helper import runner
     runner.run('djangocms_publisher')
+
 
 if __name__ == "__main__":
     run()

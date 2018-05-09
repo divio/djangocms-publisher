@@ -7,12 +7,12 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
+from .utils import relations
 from .utils.copying import (
     DEFAULT_COPY_EXCLUDE_FIELDS,
     copy_object,
-    refresh_from_db)
-from .utils import relations
-
+    refresh_from_db,
+)
 
 PUBLISHER_STATE_CHOICES = (
     ('published', 'Published'),

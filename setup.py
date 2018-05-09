@@ -13,6 +13,7 @@ def read(fname):
     # read the contents of a text file
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
+
 setup(
     name="djangocms-publisher",
     version=version,
@@ -25,8 +26,8 @@ setup(
     author_email='info@divio.ch',
     packages=find_packages(),
     install_requires=(
-        'Django>=1.8,<1.10.999',  # Django is known to use rc versions
-        'django-cms>=3.4',  # FIXME: bump to 3.5 for djangocms-moderation
+        'Django>=1.11,<2.0',
+        'django-cms>=3.5',
     ),
     include_package_data=True,
     zip_safe=False,

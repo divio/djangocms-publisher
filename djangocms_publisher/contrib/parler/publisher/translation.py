@@ -5,11 +5,9 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.functional import cached_property
 
-from ....utils.copying import (
-    get_fields_to_copy,
-    refresh_from_db)
 from ....models import Publisher
 from ....publisher import PUBLISHER_STATE_CHOICES
+from ....utils.copying import get_fields_to_copy, refresh_from_db
 
 
 class ParlerTranslationPublisher(Publisher):

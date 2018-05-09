@@ -4,9 +4,9 @@ from __future__ import absolute_import
 from django.test.testcases import TestCase
 
 from djangocms_publisher.test_project.test_app.models import (
+    ExternalThing,
     Thing,
     ThingAttachment,
-    ExternalThing,
 )
 from djangocms_publisher.utils.copying import refresh_from_db
 
@@ -158,5 +158,3 @@ class PublishTestCase(TestCase):
         self.assertFalse(published.publisher.has_pending_deletion_request)
         published = refresh_from_db(published)
         self.assertFalse(published.publisher.has_pending_deletion_request)
-
-

@@ -10,9 +10,8 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.translation import ugettext_lazy as _
 
-from ....utils.copying import (
-    refresh_from_db)
 from ....models import Publisher
+from ....utils.copying import refresh_from_db
 
 
 class ParlerPublisher(Publisher):

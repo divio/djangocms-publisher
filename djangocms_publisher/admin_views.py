@@ -6,8 +6,8 @@ from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect, JsonResponse
 from django.utils.encoding import force_text
 from django.utils.html import escape
-from django.views.generic import View, DetailView
 from django.utils.translation import ugettext_lazy as _
+from django.views.generic import DetailView
 
 
 class AdminViewMixin(object):

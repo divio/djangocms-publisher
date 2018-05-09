@@ -4,15 +4,12 @@ from __future__ import unicode_literals
 from functools import partial
 
 from django.conf import settings
+from django.core.urlresolvers import reverse
 from django.http import QueryDict
 from django.template.loader import render_to_string
 from django.utils.translation import ugettext_lazy as _
-
-from parler.utils.views import TabsList
 from parler.utils import get_language_title
-
-
-from django.core.urlresolvers import reverse
+from parler.utils.views import TabsList
 
 
 class Tab(object):

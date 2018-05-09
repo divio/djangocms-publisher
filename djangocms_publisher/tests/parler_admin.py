@@ -3,6 +3,7 @@ from __future__ import absolute_import
 
 from django.core.urlresolvers import reverse
 from django.test import TestCase
+
 from . import helpers
 from ..test_project.test_app_parler.models import ParlerThing
 
