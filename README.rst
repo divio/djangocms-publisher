@@ -11,9 +11,11 @@ application's models so that they exist in *draft* and *published* states, allow
 on unpublished drafts, whether a published version exists yet or not, and publish changes when they
 are ready.
 
+:doc:`tutorial`
 
-How to integrate django CMS Publisher into an existing application
-------------------------------------------------------------------
+
+Tutorial: integrate django CMS Publisher into an existing application
+---------------------------------------------------------------------
 
 In this example we will use:
 
@@ -101,24 +103,28 @@ The new fields on ``Poll``:
 Methods
 .......
 
-In order to manage publishing, djangocms_publisher must copy instances of ``Poll``. For example,
-when a object published object is edited, what actually happens behind the scenes is that a new
-``Poll`` instance - a database row - is created as a copy of the published version.
-
-The draft object will exist until the draft is published, at which point <**what exactly
-happens**?>.
+In order to manage publishing, Publisher must copy instances of ``Poll``. For example, when an
+object is published for the first time, what actually happens behind the scenes is that a new
+``Poll`` instance - a database row - is created as a copy of the draft (see the Reference section
+below for more details of what happens in these operations).
 
 Since Each ``Poll`` has several ``Choices`` (they each have a foreign key to their ``Poll``) we
 need to handle these relations too (i.e. the related ``Choice`` objects must be copied too).
 
 To handle this, we use the ``publisher_copy_relations`` method::
 
-  <**need to get this right - at present it works when creating a draft, but not when publishing -
-  leaves duplicates**>
-
   def publisher_copy_relations(self, old_obj):
 
+      # If there are any Choices currently pointing to the new version (self), we should delete
+      # them from the source object (old_obj), so we don't end up with duplicates.
+      #
+      # See Handling relations in the Background section for more details why.
+
+      self.choice_set.all().delete()
+
+      # loop over the Choices pointing at the source object
       for choice in old_obj.choice_set.all():
+          # copy each one, point it at the right Poll, and save
           choice.pk = None
           choice.poll = self
           choice.save()
@@ -140,13 +146,8 @@ class to use it::
       ):
 
 
-<**We should display the publishing status of objects in the list view.
-
-Also, use the custom queryset to restrict items.**>
-
-
-Using the publishing functionality
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Using the publishing functionality in the admin
+...............................................
 
 This is basic minimum implementation of publishing functionality.
 
@@ -158,10 +159,23 @@ Each poll now has new controls alonsgide the familiar **Save** button (you won't
 * **Edit** - available when a published version is extant, in *Published* view
 * **View published version** - available when a published version is extant, in *Draft* view
 
-<**In Published view, inlines look editable, but are not saveable - can  we improve this**>
 
-At http://localhost:8000/polls/, where the polls are published, you will see only the published
-versions.
+Refinements
+...........
+
+The implementation is extremely basic. If you have a ``Poll with both draft and published versions
+extant, you'll find that it appears twice in the admin list; the same goes for ``Choice`` - we
+display
+
+
+How to
+------
+
+Work with translatable models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The process for integrating Publisher with translatable models is similar to the basic method
+outlined in the tutorial. The key difference is that
 
 
 Reference
@@ -172,25 +186,35 @@ Publishing states
 
 When first created, an object has::
 
+  id: 1
   publisher_is_published_version: False
 
-On publishing, the original object is deleted, and a object created with::
+On publishing, a new copy is created, and the original object is deleted. The new object::
 
-  publisher_is_published_version: True
-  publisher_published_at: <datetime>
-
-When a published object *without a draft* is edited, the published object will be copied; there will now be a pair of objects::
-
+  id: 2
   publisher_is_published_version: True
 
+When a published object *without a draft* is edited, the object will be copied to a new object; there will now be a pair of objects::
+
+  id: 2
+  publisher_is_published_version: True
+
+  id: 3
   publisher_is_published_version: False # the draft
-  publisher_published_version_id: <id of published object>
+  publisher_published_version_id: 2
 
-This will continue to be the case until the draft object is published; at this point and the
-published version is deleted and the draft becomes the published object::
+This will continue to be the case until the draft object is published; at this point the
+draft object is saved with the id of of the published version, and the draft object deleted::
 
+  id: 2
   publisher_is_published_version: True
-  publisher_published_at: <new datetime>
 
 **or** until changes in the draft are discarded, in which case the draft object is deleted, **or**
 until a deletion request is made <**what does this do?**>
+
+
+Background
+----------
+
+Handling relations
+^^^^^^^^^^^^^^^^^^
