@@ -60,7 +60,7 @@ In the project's ``urls.py``, add the URL configuration for polls::
 
 Start the project::
 
-  ``docker-compose up``.
+  docker-compose up
 
 Add a couple of polls at http://localhost:8000/en/admin/polls/poll/add/.
 
@@ -160,7 +160,7 @@ Each poll now has new controls alonsgide the familiar **Save** button (you won't
 
 <**In Published view, inlines look editable, but are not saveable - can  we improve this**>
 
-At http://localhost:8000/polls/, where the polls are published, you will see only the draft
+At http://localhost:8000/polls/, where the polls are published, you will see only the published
 versions.
 
 
