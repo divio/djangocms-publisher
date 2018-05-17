@@ -11,8 +11,6 @@ application's models so that they exist in *draft* and *published* states, allow
 on unpublished drafts, whether a published version exists yet or not, and publish changes when they
 are ready.
 
-:doc:`tutorial`
-
 
 Tutorial: integrate django CMS Publisher into an existing application
 ---------------------------------------------------------------------
@@ -117,8 +115,6 @@ To handle this, we use the ``publisher_copy_relations`` method::
 
       # If there are any Choices currently pointing to the new version (self), we should delete
       # them from the source object (old_obj), so we don't end up with duplicates.
-      #
-      # See Handling relations in the Background section for more details why.
 
       self.choice_set.all().delete()
 
@@ -165,17 +161,95 @@ Refinements
 
 The implementation is extremely basic. If you have a ``Poll with both draft and published versions
 extant, you'll find that it appears twice in the admin list; the same goes for ``Choice`` - we
-display
+display the choices appertaining to both draft and published versions.
+
+The solution for the ``Polls`` changelist is to overwrite its ``get_changelist`` method::
+
+    def get_changelist(self, request, **kwargs):
+
+         ChangeList = super(PollAdmin, self).get_changelist(request, **kwargs)
+
+         class DraftOrLiveOnlyChangeList(ChangeList):
+             def get_queryset(self, request):
+                 return (
+                     super(DraftOrLiveOnlyChangeList, self)
+                     .get_queryset(request)
+                     .publisher_draft_or_published_only_prefer_published()
+                 )
+         return DraftOrLiveOnlyChangeList
+
+The solution for the choices is a bit different. The are various ways to approach this, but in this
+case, it seems reasonable that since each ``Choice`` only makes sense in the context of its
+``Poll``, and can already be edited their as an inline, we will restrict editing of ``Choices`` to
+that - there will no longer be a ``Choices`` changelist.
+
+To do this, delete ``admin.site.register(Choice)``.
+
+The admin list could also be more informative. It doesn't tell us anything about the states of the
+objects.
+
+Edit the ``list_display``::
+
+    list_display = (
+        'question',
+        'publisher_is_published_version',
+        'publisher_state',
+    )
+
+This provides more information, showing whether the object is published at all, and whether a draft
+exists.
 
 
-How to
-------
+View
+~~~~
+
+We have an issue in the list of polls at http://localhost:8000/polls/: if a Poll has
+``Poll`` objects for both draft and published states, it will show up twice in the list.
+
+That's because we do::
+
+  def get_queryset(self):
+      return Poll.objects.all()[:5]
+
+in the ``IndexView``. We should be more discriminating::
+
+  def get_queryset(self):
+      return Poll.objects.filter(publisher_is_published_version=True)[:5]
+
+
+Notes on the tutorial
+~~~~~~~~~~~~~~~~~~~~~
+
+This is a the most basic possible introduction to django CMS Publisher. More needs to be done for a
+viable application. For example, although draft Polls are hidden in the list, they are still
+accessible to a user who manipulates the URL.
+
+See ``/test_project/test_app`` for more implementation examples that you can adopt for a real
+project.
+
+
+How to Guides
+-------------
 
 Work with translatable models
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The process for integrating Publisher with translatable models is similar to the basic method
-outlined in the tutorial. The key difference is that
+outlined in the tutorial. The key difference is that rather than using the Publisher classes and methods for simple models, you will need to use those for Django Parler models.
+
+For example, you will need to use the ``PublisherParlerAdminMixin`` rather than
+``PublisherAdminMixin``.
+
+An example application using these utilities can be found in ``/test_project/test_app_parler``.
+
+
+Handle relations
+^^^^^^^^^^^^^^^^
+
+The tutorial above covers one simple example of relations (foreign keys to our application's
+objects).
+
+A more complex example, of many-to-many relationships, can be found in ``/test_project/test_app``.
 
 
 Reference
@@ -210,11 +284,4 @@ draft object is saved with the id of of the published version, and the draft obj
   publisher_is_published_version: True
 
 **or** until changes in the draft are discarded, in which case the draft object is deleted, **or**
-until a deletion request is made <**what does this do?**>
-
-
-Background
-----------
-
-Handling relations
-^^^^^^^^^^^^^^^^^^
+until a deletion request is made.
