@@ -11,3 +11,10 @@ For example, you will need to use the ``PublisherParlerAdminMixin`` rather than
 ``PublisherAdminMixin``.
 
 An example application using these utilities can be found in ``/test_project/test_app_parler``.
+
+..  admonition:: This section is incomplete.
+
+    To help identify key areas for completion, please report provide feedback using `GitHub issues
+    for the project <https://github.com/divio/djangocms-publisher/issues>`_.
+
+    Pull requests for improvements are also welcome.

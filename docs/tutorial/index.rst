@@ -136,7 +136,8 @@ This is basic minimum implementation of publishing functionality.
 
 You can test it by visiting http://localhost:8000/en/admin/polls/poll/.
 
-Each poll now has new controls alonsgide the familiar **Save** button (you won't see them all at once though):
+Each poll now has new controls alongside the familiar **Save** button (you won't see them all at
+once though):
 
 * **Publish** - available when a draft is extant
 * **Edit** - available when a published version is extant, in *Published* view

@@ -22,10 +22,6 @@
 django CMS Publisher
 ===================================
 
-..  warning::
-
-    This is a work in progress.
-
 
 Contents
 ========
@@ -77,6 +73,14 @@ application's models so that they exist in *draft* and *published* states, allow
 on unpublished drafts, whether a published version exists yet or not, and publish changes when they
 are ready.
 
+..  admonition:: This documentation is a work in progress.
+
+    Please report errors or omissions using `GitHub issues for the project
+    <https://github.com/divio/djangocms-publisher/issues>`_.
+
+    Pull requests for improvements are also welcome.
+
+
 .. toctree::
     :maxdepth: 2
     :hidden:
@@ -85,3 +89,4 @@ are ready.
     how-to/index
     reference/index
     explanation/index
+    documentation
