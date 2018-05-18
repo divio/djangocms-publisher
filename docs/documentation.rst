@@ -5,7 +5,7 @@ About the documentation
 =======================
 
 This documentation is `automatically published on Read the Docs
-<https://divio-djangocms-publisher.readthedocs-hosted.com/en/documentation/>`_ and updated there
+<https://divio-djangocms-publisher.readthedocs-hosted.com/en/latest/>`_ and updated there
 when commits are made to the ``develop`` branch of `django CMS Publisher GitHub repository
 <https://github.com/divio/djangocms-publisher>`_.
 

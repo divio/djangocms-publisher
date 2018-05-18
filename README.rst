@@ -14,5 +14,5 @@ are ready.
 Please see the:
 
 * `django CMS Publisher Documentation
-  <https://divio-djangocms-publisher.readthedocs-hosted.com/>_
+  <https://divio-djangocms-publisher.readthedocs-hosted.com/en/latest/>_
 * `django CMS Publisher on GitHub <https://github.com/divio/djangocms-publisher>`_
